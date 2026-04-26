@@ -239,11 +239,11 @@ function App() {
         </div>
       );
     }
-    return <Suspense fallback={suspenseFallback}>{storageNotice}<Auth onAuthSuccess={() => setView('app')} initialIsSignUp={authMode === 'signup'} workshopInfo={workshopPublicInfo} /></Suspense>;
+    return <Suspense fallback={suspenseFallback}>{storageNotice}<Auth onAuthSuccess={() => setView('research')} initialIsSignUp={authMode === 'signup'} workshopInfo={workshopPublicInfo} /></Suspense>;
   }
 
   if (view === 'auth') {
-    return <Suspense fallback={suspenseFallback}>{storageNotice}<Auth onAuthSuccess={() => setView('app')} initialIsSignUp={authMode === 'signup'} workshopInfo={workshopPublicInfo} /></Suspense>;
+    return <Suspense fallback={suspenseFallback}>{storageNotice}<Auth onAuthSuccess={() => setView('research')} initialIsSignUp={authMode === 'signup'} workshopInfo={workshopPublicInfo} /></Suspense>;
   }
 
   if (view === 'research' && session) {
