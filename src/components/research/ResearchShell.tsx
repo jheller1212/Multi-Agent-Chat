@@ -6,6 +6,7 @@ interface ResearchShellProps {
   breadcrumb: string[];
   children: ReactNode;
   onNavClick?: (page: string) => void;
+  onSignOut?: () => void;
 }
 
 function BrandMark() {
@@ -40,7 +41,7 @@ function BrandMark() {
   );
 }
 
-function Topbar({ breadcrumb }: { breadcrumb: string[] }) {
+function Topbar({ breadcrumb, onSignOut }: { breadcrumb: string[]; onSignOut?: () => void }) {
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
 
   const toggleTheme = () => {
@@ -152,6 +153,19 @@ function Topbar({ breadcrumb }: { breadcrumb: string[] }) {
           </div>
           jonasheller89
         </div>
+        {onSignOut && (
+          <button
+            onClick={onSignOut}
+            title="Sign out"
+            className="flex items-center justify-center cursor-pointer"
+            style={{
+              width: 32, height: 32, borderRadius: 6,
+              background: 'transparent', border: 0, color: 'var(--text-3)',
+            }}
+          >
+            <Icon name="x" size={14} />
+          </button>
+        )}
       </div>
     </div>
   );
@@ -263,7 +277,7 @@ function Sidebar({ activePage, onNavClick }: { activePage: string; onNavClick?: 
   );
 }
 
-export function ResearchShell({ activePage, breadcrumb, children, onNavClick }: ResearchShellProps) {
+export function ResearchShell({ activePage, breadcrumb, children, onNavClick, onSignOut }: ResearchShellProps) {
   return (
     <div
       data-density="compact"
@@ -278,7 +292,7 @@ export function ResearchShell({ activePage, breadcrumb, children, onNavClick }: 
         fontSize: 'var(--d-fs-body)',
       }}
     >
-      <Topbar breadcrumb={breadcrumb} />
+      <Topbar breadcrumb={breadcrumb} onSignOut={onSignOut} />
       <Sidebar activePage={activePage} onNavClick={onNavClick} />
       <div style={{ gridColumn: 2, gridRow: 2, overflow: 'auto', position: 'relative' }}>
         {children}
