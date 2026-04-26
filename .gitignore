@@ -6,3 +6,6 @@ dist/
 .env.*.local
 *.log
 frozen_prompts/
+
+# Local Netlify folder
+.netlify

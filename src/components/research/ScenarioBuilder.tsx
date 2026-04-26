@@ -1,5 +1,7 @@
-import { useState, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import { Icon } from './Icon';
+import { loadScenario, saveScenario, cloneScenario } from '../../lib/scenario/loader';
+import type { Scenario } from '../../types/scenario';
 
 /* ------------------------------------------------------------------ */
 /*  Mock data — verbatim from SPEC.md §4                              */
@@ -1097,11 +1099,196 @@ d_0004,A2,deal,85.00,5,cooperative,false
 }
 
 /* ------------------------------------------------------------------ */
+/*  Helpers                                                            */
+/* ------------------------------------------------------------------ */
+
+function formatTimeAgo(date: Date): string {
+  const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (seconds < 5) return 'just now';
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+/** Build a Scenario-compatible config from the current mock data (used as defaults for new scenarios). */
+function buildDefaultConfig(): Omit<Scenario, 'id' | 'userId' | 'createdAt' | 'updatedAt'> {
+  return {
+    name: 'B2B Renegotiation — capability variant',
+    description: 'Buyer-seller negotiation with judge and analyst supervisors.',
+    isPublic: false,
+    isTemplate: false,
+    domainAgents: AGENTS.filter(a => a.role === 'domain').map(a => ({
+      name: a.name,
+      description: a.desc,
+      defaultPromptTemplate: '',
+    })),
+    supervisors: AGENTS.filter(a => a.role === 'supervisor').map(a => ({
+      name: a.name,
+      type: 'classifier' as const,
+      timing: 'per_round' as const,
+      outputSchema: {},
+      promptTemplate: '',
+    })),
+    turnPolicy: {
+      type: 'alternating',
+      roundDefinition: ['Buyer', 'Seller'],
+    },
+    terminationConditions: [
+      { type: 'turn_cap', maxTurns: 12 },
+    ],
+    outcomeSchema: {
+      columns: CSV_COLUMNS.map(c => ({
+        name: c.col,
+        type: c.type as 'string' | 'integer' | 'float',
+        nullable: !c.required,
+      })),
+      utilityFunction: 'weighted_sum',
+    },
+  };
+}
+
+/* ------------------------------------------------------------------ */
 /*  Main component                                                    */
 /* ------------------------------------------------------------------ */
 
-export function ScenarioBuilder() {
+interface ScenarioBuilderProps {
+  scenarioId?: string;
+}
+
+export function ScenarioBuilder({ scenarioId }: ScenarioBuilderProps) {
   const [tab, setTab] = useState<TabId>('agents');
+  const [scenario, setScenario] = useState<Scenario | null>(null);
+  const [scenarioName, setScenarioName] = useState('B2B Renegotiation — capability variant');
+  const [scenarioDesc, setScenarioDesc] = useState('Buyer-seller negotiation with judge and analyst supervisors.');
+  const [currentId, setCurrentId] = useState<string | undefined>(scenarioId);
+  const [loading, setLoading] = useState(!!scenarioId);
+  const [saving, setSaving] = useState(false);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [lastSavedLabel, setLastSavedLabel] = useState<string>('');
+  const [showExperimentMsg, setShowExperimentMsg] = useState(false);
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dirty = useRef(false);
+
+  // Update relative time label every 10s
+  useEffect(() => {
+    if (!lastSaved) return;
+    setLastSavedLabel(formatTimeAgo(lastSaved));
+    const interval = setInterval(() => {
+      setLastSavedLabel(formatTimeAgo(lastSaved));
+    }, 10_000);
+    return () => clearInterval(interval);
+  }, [lastSaved]);
+
+  // Load scenario from Supabase when scenarioId is provided
+  useEffect(() => {
+    if (!scenarioId) {
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const loaded = await loadScenario(scenarioId);
+      if (cancelled) return;
+      if (loaded) {
+        setScenario(loaded);
+        setScenarioName(loaded.name);
+        setScenarioDesc(loaded.description);
+        setCurrentId(loaded.id);
+        setLastSaved(new Date(loaded.updatedAt));
+      }
+      setLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [scenarioId]);
+
+  const doSave = useCallback(async () => {
+    setSaving(true);
+    const config = scenario
+      ? {
+          name: scenarioName,
+          description: scenarioDesc,
+          isPublic: scenario.isPublic,
+          isTemplate: scenario.isTemplate,
+          domainAgents: scenario.domainAgents,
+          supervisors: scenario.supervisors,
+          turnPolicy: scenario.turnPolicy,
+          terminationConditions: scenario.terminationConditions,
+          outcomeSchema: scenario.outcomeSchema,
+        }
+      : { ...buildDefaultConfig(), name: scenarioName, description: scenarioDesc };
+
+    const saved = await saveScenario(config, currentId);
+    setSaving(false);
+    if (saved) {
+      setScenario(saved);
+      setCurrentId(saved.id);
+      setLastSaved(new Date());
+      dirty.current = false;
+    }
+  }, [scenario, scenarioName, scenarioDesc, currentId]);
+
+  // Auto-save: debounce 3s after last change
+  const scheduleAutoSave = useCallback(() => {
+    dirty.current = true;
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    autoSaveTimer.current = setTimeout(() => { void doSave(); }, 3000);
+  }, [doSave]);
+
+  // Mark dirty on name/desc changes (triggers auto-save)
+  const handleNameChange = useCallback((name: string) => {
+    setScenarioName(name);
+    scheduleAutoSave();
+  }, [scheduleAutoSave]);
+
+  const handleDescChange = useCallback((desc: string) => {
+    setScenarioDesc(desc);
+    scheduleAutoSave();
+  }, [scheduleAutoSave]);
+
+  const handleDuplicate = useCallback(async () => {
+    if (!currentId) {
+      // Save first, then clone
+      const saved = await saveScenario(
+        { ...buildDefaultConfig(), name: scenarioName, description: scenarioDesc },
+      );
+      if (!saved) return;
+      const cloned = await cloneScenario(saved.id);
+      if (cloned) {
+        setScenario(cloned);
+        setScenarioName(cloned.name);
+        setScenarioDesc(cloned.description);
+        setCurrentId(cloned.id);
+        setLastSaved(new Date());
+      }
+      return;
+    }
+    // Save current first if dirty
+    if (dirty.current) await doSave();
+    const cloned = await cloneScenario(currentId);
+    if (cloned) {
+      setScenario(cloned);
+      setScenarioName(cloned.name);
+      setScenarioDesc(cloned.description);
+      setCurrentId(cloned.id);
+      setLastSaved(new Date());
+    }
+  }, [currentId, scenarioName, scenarioDesc, doSave]);
+
+  const agentCount = scenario
+    ? scenario.domainAgents.length + scenario.supervisors.length
+    : AGENTS.length;
+
+  if (loading) {
+    return (
+      <div style={{ padding: 48, textAlign: 'center', color: 'var(--text-3)', fontSize: 14 }}>
+        Loading scenario...
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -1114,7 +1301,7 @@ export function ScenarioBuilder() {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-          <div>
+          <div style={{ flex: 1, minWidth: 0 }}>
             {/* Breadcrumb */}
             <div
               style={{
@@ -1124,31 +1311,76 @@ export function ScenarioBuilder() {
             >
               <a href="#" style={{ color: 'var(--text-3)', textDecoration: 'none' }}>Scenarios</a>
               <Icon name="chevron" size={12} />
-              <span style={{ color: 'var(--text-1)', fontWeight: 500 }}>B2B Renegotiation &mdash; capability variant</span>
-              <span className="r-chip r-chip-grey">Forked from Procurement Negotiation</span>
+              <span style={{ color: 'var(--text-1)', fontWeight: 500 }}>{scenarioName}</span>
+              {scenario?.isTemplate && <span className="r-chip r-chip-grey">Template</span>}
             </div>
 
-            {/* Title */}
-            <h1
+            {/* Title — editable */}
+            <input
+              value={scenarioName}
+              onChange={e => handleNameChange(e.target.value)}
               style={{
                 fontFamily: 'var(--font-h)', fontSize: 19, fontWeight: 700,
                 letterSpacing: '-0.01em', margin: '6px 0 4px', color: 'var(--text-1)',
+                background: 'transparent', border: 0, outline: 'none',
+                width: '100%', padding: 0,
               }}
-            >
-              B2B Renegotiation &mdash; capability variant
-            </h1>
+            />
             <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 0 }}>
-              Last saved 2 minutes ago &middot; 4 agents &middot; 5 slots &middot; 12 rounds
+              {saving
+                ? 'Saving...'
+                : lastSaved
+                  ? `Last saved ${lastSavedLabel}`
+                  : 'Not saved yet'}
+              {' '}&middot; {agentCount} agents &middot; {SLOTS.length} slots
             </p>
           </div>
 
           {/* Actions */}
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <button className="r-btn r-btn-ghost"><Icon name="eye" size={14} /> Preview run</button>
-            <button className="r-btn r-btn-secondary"><Icon name="copy" size={14} /> Duplicate</button>
-            <button className="r-btn r-btn-primary"><Icon name="flask" size={14} /> Use in experiment</button>
+            <button className="r-btn r-btn-ghost" onClick={() => void doSave()}>
+              <Icon name="check" size={14} /> {saving ? 'Saving...' : 'Save'}
+            </button>
+            <button className="r-btn r-btn-secondary" onClick={() => void handleDuplicate()}>
+              <Icon name="copy" size={14} /> Duplicate
+            </button>
+            <button
+              className="r-btn r-btn-primary"
+              onClick={() => setShowExperimentMsg(true)}
+            >
+              <Icon name="flask" size={14} /> Use in experiment
+            </button>
           </div>
         </div>
+
+        {/* Experiment placeholder message */}
+        {showExperimentMsg && (
+          <div
+            style={{
+              margin: '12px 0 0',
+              padding: '10px 14px',
+              background: 'var(--accent-2-soft)',
+              borderRadius: 8,
+              fontSize: 13,
+              color: 'var(--accent-2)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+            }}
+          >
+            <Icon name="flask" size={14} />
+            Experiment integration coming soon. This scenario will be available in the Experiments tab.
+            <button
+              onClick={() => setShowExperimentMsg(false)}
+              style={{
+                marginLeft: 'auto', background: 'transparent', border: 0,
+                color: 'var(--accent-2)', cursor: 'pointer', padding: '2px 6px',
+              }}
+            >
+              <Icon name="close" size={12} />
+            </button>
+          </div>
+        )}
 
         {/* Tab bar */}
         <TabBar tabs={TABS} current={tab} onChange={setTab} />

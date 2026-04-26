@@ -1,11 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Icon } from './Icon';
+import { supabase } from '../../lib/supabase';
+import { loadScenarios, seedScenarioTemplates, cloneScenario } from '../../lib/scenario/loader';
+import type { Scenario } from '../../types/scenario';
 
 /* ------------------------------------------------------------------ */
-/*  Mock data — verbatim from SPEC.md §3                              */
+/*  Mock / fallback data                                               */
 /* ------------------------------------------------------------------ */
 
-interface Scenario {
+interface MockScenario {
   id: string;
   title: string;
   blurb: string;
@@ -20,7 +23,7 @@ interface Scenario {
   citations: number;
 }
 
-const SCENARIOS: Scenario[] = [
+const MOCK_SCENARIOS: MockScenario[] = [
   {
     id: 'proc-neg',
     title: 'Procurement Negotiation',
@@ -107,7 +110,7 @@ const SCENARIOS: Scenario[] = [
   },
 ];
 
-interface YourScenario {
+interface MockYourScenario {
   id: string;
   title: string;
   updated: string;
@@ -116,13 +119,72 @@ interface YourScenario {
   draft: boolean;
 }
 
-const YOUR_SCENARIOS: YourScenario[] = [
+const MOCK_YOUR_SCENARIOS: MockYourScenario[] = [
   { id: 'y1', title: 'B2B Renegotiation — capability variant', updated: '2 days ago', based: 'Procurement Negotiation', runs: 4, draft: false },
   { id: 'y2', title: 'Mediation w/ asymmetric info', updated: 'last week', based: 'Mediation', runs: 1, draft: false },
   { id: 'y3', title: 'Sales-rep persuasion (draft)', updated: 'just now', based: 'Persuasion Cascade', runs: 0, draft: true },
 ];
 
+const DOMAIN_MAP: Record<string, string> = {
+  'Procurement Negotiation': 'Negotiation',
+  'Legal Advocacy': 'Law',
+  'Mediation': 'Negotiation',
+};
+
+const ICON_MAP: Record<string, string> = {
+  'Procurement Negotiation': 'handshake',
+  'Legal Advocacy': 'scale',
+  'Mediation': 'spark',
+};
+
+const ACCENT_MAP: Record<string, 'blue' | 'orange' | 'grey'> = {
+  'Procurement Negotiation': 'blue',
+  'Legal Advocacy': 'orange',
+  'Mediation': 'blue',
+};
+
 const FILTERS = ['All domains', 'Negotiation', 'Law', 'Psychology', 'Marketing'] as const;
+
+/* ------------------------------------------------------------------ */
+/*  Helpers to map Scenario -> display card format                      */
+/* ------------------------------------------------------------------ */
+
+function scenarioToCard(s: Scenario): MockScenario {
+  return {
+    id: s.id,
+    title: s.name,
+    blurb: s.description,
+    domain: DOMAIN_MAP[s.name] ?? 'Research',
+    agents: s.domainAgents?.length ?? 2,
+    rounds: s.terminationConditions?.find(
+      (tc): tc is { type: 'turn_cap'; maxTurns: number } => tc.type === 'turn_cap'
+    )?.maxTurns ?? 10,
+    tags: s.supervisors?.map(sup => sup.type) ?? [],
+    featured: s.isTemplate,
+    icon: ICON_MAP[s.name] ?? 'sparkle',
+    accent: ACCENT_MAP[s.name] ?? 'grey',
+    runs: 0,
+    citations: 0,
+  };
+}
+
+function scenarioToYourCard(s: Scenario): MockYourScenario {
+  const updated = s.updatedAt ? new Date(s.updatedAt) : new Date();
+  const diffMs = Date.now() - updated.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  let updatedLabel = 'just now';
+  if (diffDays > 7) updatedLabel = `${Math.floor(diffDays / 7)} week${Math.floor(diffDays / 7) > 1 ? 's' : ''} ago`;
+  else if (diffDays > 0) updatedLabel = `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+
+  return {
+    id: s.id,
+    title: s.name,
+    updated: updatedLabel,
+    based: '',
+    runs: 0,
+    draft: false,
+  };
+}
 
 /* ------------------------------------------------------------------ */
 /*  Accent helpers                                                     */
@@ -143,7 +205,7 @@ const accentColor: Record<string, string> = {
 /*  Sub-components                                                     */
 /* ------------------------------------------------------------------ */
 
-function ScenarioCard({ s }: { s: Scenario }) {
+function ScenarioCard({ s, onClone }: { s: MockScenario; onClone: (id: string) => void }) {
   const [hovered, setHovered] = useState(false);
 
   return (
@@ -244,7 +306,7 @@ function ScenarioCard({ s }: { s: Scenario }) {
         <button className="r-btn r-btn-ghost r-btn-sm">
           <Icon name="eye" size={13} /> Preview
         </button>
-        <button className="r-btn r-btn-secondary r-btn-sm">
+        <button className="r-btn r-btn-secondary r-btn-sm" onClick={() => onClone(s.id)}>
           <Icon name="copy" size={13} /> Clone
         </button>
       </div>
@@ -252,7 +314,7 @@ function ScenarioCard({ s }: { s: Scenario }) {
   );
 }
 
-function YourCard({ y }: { y: YourScenario }) {
+function YourCard({ y }: { y: MockYourScenario }) {
   return (
     <div
       style={{
@@ -280,8 +342,12 @@ function YourCard({ y }: { y: YourScenario }) {
           display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap',
         }}
       >
-        <span>Based on <strong style={{ color: 'var(--text-2)', fontWeight: 600 }}>{y.based}</strong></span>
-        <span style={{ color: 'var(--text-4)' }}>·</span>
+        {y.based && (
+          <>
+            <span>Based on <strong style={{ color: 'var(--text-2)', fontWeight: 600 }}>{y.based}</strong></span>
+            <span style={{ color: 'var(--text-4)' }}>·</span>
+          </>
+        )}
         <span>Updated {y.updated}</span>
         <span style={{ color: 'var(--text-4)' }}>·</span>
         <span>{y.runs} run{y.runs === 1 ? '' : 's'}</span>
@@ -306,8 +372,74 @@ function YourCard({ y }: { y: YourScenario }) {
 
 export function Library() {
   const [filter, setFilter] = useState<string>('All domains');
+  const [loading, setLoading] = useState(true);
+  const [templateCards, setTemplateCards] = useState<MockScenario[]>(MOCK_SCENARIOS);
+  const [yourCards, setYourCards] = useState<MockYourScenario[]>(MOCK_YOUR_SCENARIOS);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const seededRef = useRef(false);
 
-  const visible = filter === 'All domains' ? SCENARIOS : SCENARIOS.filter((s) => s.domain === filter);
+  const fetchScenarios = useCallback(async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setIsAuthenticated(false);
+        setTemplateCards(MOCK_SCENARIOS);
+        setYourCards(MOCK_YOUR_SCENARIOS);
+        setLoading(false);
+        return;
+      }
+
+      setIsAuthenticated(true);
+
+      // Seed templates on first mount
+      if (!seededRef.current) {
+        seededRef.current = true;
+        await seedScenarioTemplates();
+      }
+
+      const scenarios = await loadScenarios();
+      if (scenarios.length === 0) {
+        // Fallback to mock data if DB is empty
+        setTemplateCards(MOCK_SCENARIOS);
+        setYourCards(MOCK_YOUR_SCENARIOS);
+      } else {
+        const templates = scenarios.filter(s => s.isTemplate);
+        const userScenarios = scenarios.filter(s => !s.isTemplate);
+
+        setTemplateCards(
+          templates.length > 0
+            ? templates.map(scenarioToCard)
+            : MOCK_SCENARIOS,
+        );
+        setYourCards(
+          userScenarios.length > 0
+            ? userScenarios.map(scenarioToYourCard)
+            : MOCK_YOUR_SCENARIOS,
+        );
+      }
+    } catch (err) {
+      console.warn('[Library] Failed to load scenarios:', err);
+      setTemplateCards(MOCK_SCENARIOS);
+      setYourCards(MOCK_YOUR_SCENARIOS);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchScenarios();
+  }, [fetchScenarios]);
+
+  const handleClone = useCallback(async (scenarioId: string) => {
+    if (!isAuthenticated) return;
+    const cloned = await cloneScenario(scenarioId);
+    if (cloned) {
+      // Re-fetch to update the list
+      await fetchScenarios();
+    }
+  }, [isAuthenticated, fetchScenarios]);
+
+  const visible = filter === 'All domains' ? templateCards : templateCards.filter((s) => s.domain === filter);
   const featured = visible.filter((s) => s.featured);
   const more = visible.filter((s) => !s.featured);
 
@@ -349,7 +481,7 @@ export function Library() {
             <Icon name="search" size={14} />
             <input
               type="text"
-              placeholder="Search 18 templates by name, domain, or tag\u2026"
+              placeholder="Search templates by name, domain, or tag\u2026"
               style={{
                 border: 0, padding: '9px 0', background: 'transparent',
                 fontSize: 13, flex: 1, outline: 'none',
@@ -365,7 +497,7 @@ export function Library() {
                 color: 'var(--text-4)',
               }}
             >
-              ⌘K
+              {'\u2318'}K
             </span>
           </div>
 
@@ -403,92 +535,100 @@ export function Library() {
 
       {/* Page body */}
       <div className="r-page-body">
-        {/* Your scenarios */}
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 12 }}>
-          <h2
-            style={{
-              fontFamily: 'var(--font-h)', fontSize: 14, fontWeight: 700,
-              color: 'var(--text-1)', margin: 0, letterSpacing: '0.01em',
-            }}
-          >
-            Your scenarios
-          </h2>
-          <a
-            href="#"
-            style={{
-              fontSize: 12, color: 'var(--accent-2)',
-              textDecoration: 'none',
-            }}
-          >
-            View all →
-          </a>
-        </div>
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-            gap: 10, marginBottom: 8,
-          }}
-        >
-          {YOUR_SCENARIOS.map((y) => (
-            <YourCard key={y.id} y={y} />
-          ))}
-        </div>
-
-        {/* Featured templates */}
-        {featured.length > 0 && (
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--text-3)', fontSize: 13 }}>
+            Loading scenarios...
+          </div>
+        ) : (
           <>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 12, marginTop: 28 }}>
+            {/* Your scenarios */}
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 12 }}>
               <h2
                 style={{
                   fontFamily: 'var(--font-h)', fontSize: 14, fontWeight: 700,
                   color: 'var(--text-1)', margin: 0, letterSpacing: '0.01em',
                 }}
               >
-                Featured templates
+                Your scenarios
               </h2>
-              <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
-                Curated by DEXLab — replications of published studies
-              </span>
-            </div>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-                gap: 14,
-              }}
-            >
-              {featured.map((s) => (
-                <ScenarioCard key={s.id} s={s} />
-              ))}
-            </div>
-          </>
-        )}
-
-        {/* More templates */}
-        {more.length > 0 && (
-          <>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 12, marginTop: 28 }}>
-              <h2
+              <a
+                href="#"
                 style={{
-                  fontFamily: 'var(--font-h)', fontSize: 14, fontWeight: 700,
-                  color: 'var(--text-1)', margin: 0, letterSpacing: '0.01em',
+                  fontSize: 12, color: 'var(--accent-2)',
+                  textDecoration: 'none',
                 }}
               >
-                More templates
-              </h2>
+                View all →
+              </a>
             </div>
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-                gap: 14,
+                gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+                gap: 10, marginBottom: 8,
               }}
             >
-              {more.map((s) => (
-                <ScenarioCard key={s.id} s={s} />
+              {yourCards.map((y) => (
+                <YourCard key={y.id} y={y} />
               ))}
             </div>
+
+            {/* Featured templates */}
+            {featured.length > 0 && (
+              <>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 12, marginTop: 28 }}>
+                  <h2
+                    style={{
+                      fontFamily: 'var(--font-h)', fontSize: 14, fontWeight: 700,
+                      color: 'var(--text-1)', margin: 0, letterSpacing: '0.01em',
+                    }}
+                  >
+                    Featured templates
+                  </h2>
+                  <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                    Curated by DEXLab — replications of published studies
+                  </span>
+                </div>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+                    gap: 14,
+                  }}
+                >
+                  {featured.map((s) => (
+                    <ScenarioCard key={s.id} s={s} onClone={handleClone} />
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* More templates */}
+            {more.length > 0 && (
+              <>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 12, marginTop: 28 }}>
+                  <h2
+                    style={{
+                      fontFamily: 'var(--font-h)', fontSize: 14, fontWeight: 700,
+                      color: 'var(--text-1)', margin: 0, letterSpacing: '0.01em',
+                    }}
+                  >
+                    More templates
+                  </h2>
+                </div>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+                    gap: 14,
+                  }}
+                >
+                  {more.map((s) => (
+                    <ScenarioCard key={s.id} s={s} onClone={handleClone} />
+                  ))}
+                </div>
+              </>
+            )}
           </>
         )}
       </div>
