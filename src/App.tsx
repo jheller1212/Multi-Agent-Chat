@@ -160,7 +160,7 @@ function App() {
           trackWorkshopSignup(session.access_token).catch(() => {});
         }
       }
-      if (!session) setView('landing');
+      if (!session && view !== 'research') setView('landing');
     });
 
     return () => subscription.unsubscribe();
