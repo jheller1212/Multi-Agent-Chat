@@ -1,0 +1,497 @@
+import { useState } from 'react';
+import { Icon } from './Icon';
+
+/* ------------------------------------------------------------------ */
+/*  Mock data — verbatim from SPEC.md §3                              */
+/* ------------------------------------------------------------------ */
+
+interface Scenario {
+  id: string;
+  title: string;
+  blurb: string;
+  domain: string;
+  agents: number;
+  rounds: number;
+  tags: string[];
+  featured: boolean;
+  icon: string;
+  accent: 'blue' | 'orange' | 'grey';
+  runs: number;
+  citations: number;
+}
+
+const SCENARIOS: Scenario[] = [
+  {
+    id: 'proc-neg',
+    title: 'Procurement Negotiation',
+    blurb: 'Buyer and seller negotiate price, volume and delivery terms. Walk-away thresholds, BATNA modelling, multi-issue bargaining.',
+    domain: 'Negotiation',
+    agents: 2,
+    rounds: 12,
+    tags: ['multi-issue', 'BATNA', 'utility'],
+    featured: true,
+    icon: 'handshake',
+    accent: 'blue',
+    runs: 38,
+    citations: 4,
+  },
+  {
+    id: 'legal-adv',
+    title: 'Legal Advocacy',
+    blurb: 'Plaintiff and defendant advocates argue before a judge. Closed-record advocacy, three-claim structure, ruling and rationale.',
+    domain: 'Law',
+    agents: 3,
+    rounds: 6,
+    tags: ['advocacy', 'judge-decision', 'rationale'],
+    featured: true,
+    icon: 'scale',
+    accent: 'orange',
+    runs: 21,
+    citations: 2,
+  },
+  {
+    id: 'mediation',
+    title: 'Mediation',
+    blurb: 'Neutral mediator shepherds two disputing parties toward settlement. Caucus + joint-session protocol, integrative bargaining.',
+    domain: 'Negotiation',
+    agents: 3,
+    rounds: 14,
+    tags: ['integrative', 'mediator', 'settlement'],
+    featured: true,
+    icon: 'spark',
+    accent: 'blue',
+    runs: 12,
+    citations: 1,
+  },
+  {
+    id: 'cbt',
+    title: 'CBT Therapy Session',
+    blurb: 'Therapist guides a patient through cognitive behavioural reframing. Open-ended affective protocol with adherence rubric.',
+    domain: 'Psychology',
+    agents: 2,
+    rounds: 10,
+    tags: ['protocol-adherence', 'open-ended'],
+    featured: false,
+    icon: 'sparkle',
+    accent: 'grey',
+    runs: 6,
+    citations: 0,
+  },
+  {
+    id: 'persuade',
+    title: 'Persuasion Cascade',
+    blurb: 'Source agent attempts to shift target\'s stated belief on a public-issue prompt. Pre/post Likert, argument coding.',
+    domain: 'Marketing',
+    agents: 2,
+    rounds: 8,
+    tags: ['attitude-change', 'pre-post'],
+    featured: false,
+    icon: 'target',
+    accent: 'grey',
+    runs: 9,
+    citations: 1,
+  },
+  {
+    id: 'jury',
+    title: 'Jury Deliberation',
+    blurb: 'N=6 jurors deliberate on a vignette case. Holdouts, leadership patterns, verdict pathway.',
+    domain: 'Law',
+    agents: 6,
+    rounds: 20,
+    tags: ['group', 'verdict', 'leadership'],
+    featured: false,
+    icon: 'layers',
+    accent: 'grey',
+    runs: 3,
+    citations: 0,
+  },
+];
+
+interface YourScenario {
+  id: string;
+  title: string;
+  updated: string;
+  based: string;
+  runs: number;
+  draft: boolean;
+}
+
+const YOUR_SCENARIOS: YourScenario[] = [
+  { id: 'y1', title: 'B2B Renegotiation — capability variant', updated: '2 days ago', based: 'Procurement Negotiation', runs: 4, draft: false },
+  { id: 'y2', title: 'Mediation w/ asymmetric info', updated: 'last week', based: 'Mediation', runs: 1, draft: false },
+  { id: 'y3', title: 'Sales-rep persuasion (draft)', updated: 'just now', based: 'Persuasion Cascade', runs: 0, draft: true },
+];
+
+const FILTERS = ['All domains', 'Negotiation', 'Law', 'Psychology', 'Marketing'] as const;
+
+/* ------------------------------------------------------------------ */
+/*  Accent helpers                                                     */
+/* ------------------------------------------------------------------ */
+
+const accentBg: Record<string, string> = {
+  blue: 'var(--accent-2-soft)',
+  orange: 'var(--accent-1-soft)',
+  grey: 'var(--surface-sunken)',
+};
+const accentColor: Record<string, string> = {
+  blue: 'var(--accent-2)',
+  orange: 'var(--accent-1)',
+  grey: 'var(--text-3)',
+};
+
+/* ------------------------------------------------------------------ */
+/*  Sub-components                                                     */
+/* ------------------------------------------------------------------ */
+
+function ScenarioCard({ s }: { s: Scenario }) {
+  const [hovered, setHovered] = useState(false);
+
+  return (
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        background: 'var(--surface-panel)',
+        border: `1px solid ${hovered ? 'var(--line-2)' : 'var(--line-1)'}`,
+        borderRadius: 8,
+        padding: 18,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 10,
+        transition: 'border-color var(--dur-fast), box-shadow var(--dur-fast)',
+        boxShadow: hovered ? 'var(--shadow-2)' : 'none',
+      }}
+    >
+      {/* Head: icon + meta chips */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+        <div
+          style={{
+            width: 36, height: 36, borderRadius: 8,
+            background: accentBg[s.accent],
+            color: accentColor[s.accent],
+            display: 'grid', placeItems: 'center', flexShrink: 0,
+          }}
+        >
+          <Icon name={s.icon} size={20} />
+        </div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <span className="r-chip r-chip-grey">{s.domain}</span>
+          {s.featured && (
+            <span className="r-chip r-chip-orange">
+              <Icon name="star" size={10} /> Featured
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Title */}
+      <h3
+        style={{
+          fontFamily: 'var(--font-h)', fontSize: 15, fontWeight: 700,
+          letterSpacing: '-0.01em', margin: 0, color: 'var(--text-1)',
+        }}
+      >
+        {s.title}
+      </h3>
+
+      {/* Blurb */}
+      <p style={{ fontSize: 12.5, lineHeight: 1.55, color: 'var(--text-2)', margin: 0 }}>
+        {s.blurb}
+      </p>
+
+      {/* Stats row */}
+      <div style={{ display: 'flex', gap: 12, fontSize: 11.5, color: 'var(--text-3)', flexWrap: 'wrap' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <Icon name="bot" size={12} /> {s.agents} agents
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <Icon name="refresh" size={12} /> {s.rounds} rounds
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <Icon name="play" size={12} /> {s.runs} runs
+        </span>
+        {s.citations > 0 && (
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Icon name="book" size={12} /> {s.citations} cites
+          </span>
+        )}
+      </div>
+
+      {/* Tags */}
+      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+        {s.tags.map((t) => (
+          <span
+            key={t}
+            style={{
+              fontFamily: 'var(--font-mono)', fontSize: 10.5,
+              padding: '2px 6px', background: 'var(--surface-sunken)',
+              color: 'var(--text-3)', borderRadius: 3,
+            }}
+          >
+            {t}
+          </span>
+        ))}
+      </div>
+
+      {/* Footer */}
+      <div
+        style={{
+          display: 'flex', gap: 6, marginTop: 4,
+          borderTop: '1px solid var(--line-1)', paddingTop: 10,
+          justifyContent: 'flex-end',
+        }}
+      >
+        <button className="r-btn r-btn-ghost r-btn-sm">
+          <Icon name="eye" size={13} /> Preview
+        </button>
+        <button className="r-btn r-btn-secondary r-btn-sm">
+          <Icon name="copy" size={13} /> Clone
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function YourCard({ y }: { y: YourScenario }) {
+  return (
+    <div
+      style={{
+        background: 'var(--surface-panel)',
+        border: '1px solid var(--line-1)',
+        borderRadius: 8,
+        padding: '12px 14px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 4,
+      }}
+    >
+      {/* Title row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
+        <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-1)' }}>
+          {y.title}
+        </div>
+        {y.draft && <span className="r-chip r-chip-orange">Draft</span>}
+      </div>
+
+      {/* Meta */}
+      <div
+        style={{
+          fontSize: 11.5, color: 'var(--text-3)',
+          display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap',
+        }}
+      >
+        <span>Based on <strong style={{ color: 'var(--text-2)', fontWeight: 600 }}>{y.based}</strong></span>
+        <span style={{ color: 'var(--text-4)' }}>·</span>
+        <span>Updated {y.updated}</span>
+        <span style={{ color: 'var(--text-4)' }}>·</span>
+        <span>{y.runs} run{y.runs === 1 ? '' : 's'}</span>
+      </div>
+
+      {/* Actions */}
+      <div style={{ display: 'flex', gap: 4, marginTop: 2, marginLeft: -8 }}>
+        <button className="r-btn r-btn-ghost r-btn-sm">
+          <Icon name="edit" size={12} /> Edit
+        </button>
+        <button className="r-btn r-btn-ghost r-btn-sm">
+          <Icon name="play" size={12} /> Run
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Main Library component                                             */
+/* ------------------------------------------------------------------ */
+
+export function Library() {
+  const [filter, setFilter] = useState<string>('All domains');
+
+  const visible = filter === 'All domains' ? SCENARIOS : SCENARIOS.filter((s) => s.domain === filter);
+  const featured = visible.filter((s) => s.featured);
+  const more = visible.filter((s) => !s.featured);
+
+  return (
+    <div>
+      {/* Page head */}
+      <div className="r-page-head">
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+          <div>
+            <h1 className="r-page-title">Scenario Library</h1>
+            <p className="r-page-sub">
+              Templates for multi-agent experiments. Clone any to start your own scenario.
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="r-btn r-btn-secondary">
+              <Icon name="book" size={14} /> Browse paper-replications
+            </button>
+            <button className="r-btn r-btn-primary">
+              <Icon name="plus" size={14} /> Blank scenario
+            </button>
+          </div>
+        </div>
+
+        {/* Search + filters */}
+        <div style={{ display: 'flex', gap: 12, marginTop: 18, alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* Search input pill */}
+          <div
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              border: '1px solid var(--line-2)',
+              background: 'var(--surface-panel)',
+              borderRadius: 6,
+              padding: '0 10px',
+              flex: 1, minWidth: 280, maxWidth: 480,
+              color: 'var(--text-3)',
+            }}
+          >
+            <Icon name="search" size={14} />
+            <input
+              type="text"
+              placeholder="Search 18 templates by name, domain, or tag\u2026"
+              style={{
+                border: 0, padding: '9px 0', background: 'transparent',
+                fontSize: 13, flex: 1, outline: 'none',
+                fontFamily: 'var(--font-app)', color: 'var(--text-1)',
+              }}
+            />
+            <span
+              style={{
+                marginLeft: 'auto', fontSize: 11,
+                fontFamily: 'var(--font-mono)',
+                background: 'var(--surface-sunken)',
+                padding: '2px 6px', borderRadius: 4,
+                color: 'var(--text-4)',
+              }}
+            >
+              ⌘K
+            </span>
+          </div>
+
+          {/* Filter chips */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            {FILTERS.map((f) => (
+              <button
+                key={f}
+                className={`r-chip ${filter === f ? 'r-chip-blue' : 'r-chip-grey'}`}
+                onClick={() => setFilter(f)}
+                style={{ cursor: 'pointer', border: 0 }}
+              >
+                {f}
+              </button>
+            ))}
+
+            {/* Vertical divider */}
+            <span
+              style={{
+                width: 1, height: 20,
+                background: 'var(--line-1)',
+                margin: '0 4px',
+              }}
+            />
+
+            <button className="r-btn r-btn-ghost r-btn-sm">
+              <Icon name="filter" size={13} /> More filters
+            </button>
+            <button className="r-btn r-btn-ghost r-btn-sm">
+              <Icon name="sortAsc" size={13} /> Most used
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Page body */}
+      <div className="r-page-body">
+        {/* Your scenarios */}
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 12 }}>
+          <h2
+            style={{
+              fontFamily: 'var(--font-h)', fontSize: 14, fontWeight: 700,
+              color: 'var(--text-1)', margin: 0, letterSpacing: '0.01em',
+            }}
+          >
+            Your scenarios
+          </h2>
+          <a
+            href="#"
+            style={{
+              fontSize: 12, color: 'var(--accent-2)',
+              textDecoration: 'none',
+            }}
+          >
+            View all →
+          </a>
+        </div>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+            gap: 10, marginBottom: 8,
+          }}
+        >
+          {YOUR_SCENARIOS.map((y) => (
+            <YourCard key={y.id} y={y} />
+          ))}
+        </div>
+
+        {/* Featured templates */}
+        {featured.length > 0 && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 12, marginTop: 28 }}>
+              <h2
+                style={{
+                  fontFamily: 'var(--font-h)', fontSize: 14, fontWeight: 700,
+                  color: 'var(--text-1)', margin: 0, letterSpacing: '0.01em',
+                }}
+              >
+                Featured templates
+              </h2>
+              <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                Curated by DEXLab — replications of published studies
+              </span>
+            </div>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+                gap: 14,
+              }}
+            >
+              {featured.map((s) => (
+                <ScenarioCard key={s.id} s={s} />
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* More templates */}
+        {more.length > 0 && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 12, marginTop: 28 }}>
+              <h2
+                style={{
+                  fontFamily: 'var(--font-h)', fontSize: 14, fontWeight: 700,
+                  color: 'var(--text-1)', margin: 0, letterSpacing: '0.01em',
+                }}
+              >
+                More templates
+              </h2>
+            </div>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+                gap: 14,
+              }}
+            >
+              {more.map((s) => (
+                <ScenarioCard key={s.id} s={s} />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}

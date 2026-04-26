@@ -1,0 +1,169 @@
+/* Library page — scenario card grid */
+
+.lib-controls {
+  display: flex;
+  gap: 12px;
+  margin-top: 18px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.lib-search {
+  display: flex; align-items: center; gap: 8px;
+  border: 1px solid var(--line-2);
+  background: var(--surface-panel);
+  border-radius: 6px;
+  padding: 0 10px;
+  flex: 1;
+  min-width: 280px;
+  max-width: 480px;
+  color: var(--text-3);
+}
+.lib-search .input {
+  border: 0;
+  padding: 9px 0;
+  background: transparent;
+  font-size: 13px;
+}
+.lib-search .input:focus { box-shadow: none; }
+.lib-search .kbd { margin-left: auto; }
+
+.lib-filters { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.lib-sep { width: 1px; height: 20px; background: var(--line-1); margin: 0 4px; }
+
+.lib-section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.lib-h2 {
+  font-family: var(--font-h);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-1);
+  margin: 0;
+  letter-spacing: 0.01em;
+}
+.lib-h2-sub {
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.lib-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 14px;
+}
+
+.scenario-card {
+  background: var(--surface-panel);
+  border: 1px solid var(--line-1);
+  border-radius: 8px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: border-color var(--dur-fast), box-shadow var(--dur-fast), transform var(--dur-fast);
+}
+.scenario-card:hover {
+  border-color: var(--line-2);
+  box-shadow: var(--shadow-2);
+}
+
+.sc-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  justify-content: space-between;
+}
+.sc-icon {
+  width: 36px; height: 36px;
+  border-radius: 8px;
+  display: grid; place-items: center;
+  flex-shrink: 0;
+}
+.sc-blue { background: var(--accent-2-soft); color: var(--accent-2); }
+.sc-orange { background: var(--accent-1-soft); color: var(--accent-1); }
+.sc-grey { background: var(--surface-sunken); color: var(--text-3); }
+.sc-meta { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.sc-title {
+  font-family: var(--font-h);
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: -0.01em;
+  color: var(--text-1);
+}
+.sc-blurb {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text-2);
+  margin: 0;
+}
+.sc-stats {
+  display: flex;
+  gap: 12px;
+  font-size: 11.5px;
+  color: var(--text-3);
+  flex-wrap: wrap;
+}
+.sc-stats span { display: flex; align-items: center; gap: 4px; }
+
+.sc-tags { display: flex; gap: 4px; flex-wrap: wrap; }
+.sc-tag {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  padding: 2px 6px;
+  background: var(--surface-sunken);
+  color: var(--text-3);
+  border-radius: 3px;
+}
+
+.sc-foot {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+  border-top: 1px solid var(--line-1);
+  padding-top: 10px;
+  justify-content: flex-end;
+}
+
+/* Your scenarios — denser strip cards */
+.your-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.your-card {
+  background: var(--surface-panel);
+  border: 1px solid var(--line-1);
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.yc-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: space-between;
+}
+.yc-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-1);
+}
+.yc-meta {
+  font-size: 11.5px;
+  color: var(--text-3);
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.yc-meta strong { color: var(--text-2); font-weight: 600; }
+.yc-meta .dot { color: var(--text-4); }
+.yc-foot { display: flex; gap: 4px; margin-top: 2px; margin-left: -8px; }

@@ -1,0 +1,256 @@
+/* ==========================================================================
+   DEXLab Design System — Colors & Type
+   Digital Experience Laboratory, School of Business and Economics
+   Maastricht University
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   FONTS
+   Primary brand typefaces (from DEXLab Brand Guidelines):
+     - Open Sans Bold — headings, logo wordmark context
+     - Avenir Light   — body, long-form
+   Secondary (supplied in the brand pack, used across collateral):
+     - Myriad Pro     — flyers, posters, UI labels
+   -------------------------------------------------------------------------- */
+
+@font-face {
+  font-family: 'Open Sans';
+  src: url('fonts/OpenSans-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Avenir';
+  src: url('fonts/Avenir-Light.ttf') format('truetype');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Myriad Pro';
+  src: url('fonts/MyriadPro-Light.otf') format('opentype');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Myriad Pro';
+  src: url('fonts/MyriadPro-Regular.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Myriad Pro';
+  src: url('fonts/MyriadPro-Semibold.otf') format('opentype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Myriad Pro';
+  src: url('fonts/MyriadPro-Bold.otf') format('opentype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* --------------------------------------------------------------------------
+   TOKENS
+   -------------------------------------------------------------------------- */
+
+:root {
+  /* ---- Brand colors (primary palette) ---- */
+  --dex-deep-blue:   #001C3D; /* primary text, logo "DEX" wordmark-outline, brand anchor */
+  --dex-light-blue:  #00A2DB; /* "DEX" wordmark fill, accent / link */
+  --dex-bright-orange: #E84E10; /* "Lab" wordmark, calls to action, highlights */
+
+  /* ---- Brand colors (secondary palette) ---- */
+  --dex-white:       #FFFFFF;
+  --dex-light-grey:  #D5D9DC;
+  --dex-dark-azure:  #2D85C6; /* supporting blue — charts, secondary CTAs */
+
+  /* ---- Neutral scale (derived from Deep Blue + Light Grey) ---- */
+  --dex-ink-900: #001C3D;
+  --dex-ink-700: #1F3556;
+  --dex-ink-500: #5A6B80;
+  --dex-ink-300: #9AA4B0;
+  --dex-ink-200: #D5D9DC;
+  --dex-ink-100: #EEF1F4;
+  --dex-ink-50:  #F7F9FB;
+  --dex-ink-0:   #FFFFFF;
+
+  /* ---- Semantic foreground / background ---- */
+  --fg-1: var(--dex-deep-blue);      /* primary text — ALWAYS Deep Blue */
+  --fg-2: var(--dex-ink-700);        /* secondary text */
+  --fg-3: var(--dex-ink-500);        /* muted / caption */
+  --fg-on-dark: var(--dex-white);
+
+  --bg-1: var(--dex-white);          /* canvas */
+  --bg-2: var(--dex-ink-50);         /* subtle panel */
+  --bg-3: var(--dex-ink-100);        /* elevated panel / field bg */
+  --bg-dark: var(--dex-deep-blue);   /* inverted surfaces */
+
+  --border-subtle: var(--dex-ink-200);
+  --border-strong: var(--dex-ink-300);
+
+  --accent: var(--dex-bright-orange);
+  --accent-hover: #C74109;
+  --link: var(--dex-light-blue);
+  --link-hover: #0088B8;
+
+  /* ---- Status (derived, harmonious with brand) ---- */
+  --success: #2EA36B;
+  --warning: #E8A110;
+  --danger:  var(--dex-bright-orange);
+  --info:    var(--dex-light-blue);
+
+  /* ---- Typography families ---- */
+  --font-display: 'Open Sans', 'Helvetica Neue', Arial, sans-serif;
+  --font-body:    'Avenir', 'Myriad Pro', 'Helvetica Neue', Arial, sans-serif;
+  --font-ui:      'Myriad Pro', 'Open Sans', 'Helvetica Neue', Arial, sans-serif;
+  --font-mono:    'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
+
+  /* ---- Type scale ---- */
+  --fs-display: 64px;
+  --fs-h1: 44px;
+  --fs-h2: 32px;
+  --fs-h3: 24px;
+  --fs-h4: 20px;
+  --fs-body: 16px;
+  --fs-small: 14px;
+  --fs-micro: 12px;
+
+  --lh-tight: 1.1;
+  --lh-heading: 1.2;
+  --lh-body: 1.55;
+  --lh-loose: 1.7;
+
+  --tracking-tight: -0.01em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.04em;
+  --tracking-caps: 0.08em;
+
+  /* ---- Spacing (4px base) ---- */
+  --sp-0: 0;
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+  --sp-8: 64px;
+  --sp-9: 96px;
+
+  /* ---- Radii ---- */
+  --radius-none: 0;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-pill: 999px;
+
+  /* ---- Shadows ---- */
+  --shadow-1: 0 1px 2px rgba(0, 28, 61, 0.06), 0 1px 1px rgba(0, 28, 61, 0.04);
+  --shadow-2: 0 4px 10px rgba(0, 28, 61, 0.08), 0 2px 4px rgba(0, 28, 61, 0.04);
+  --shadow-3: 0 12px 28px rgba(0, 28, 61, 0.12), 0 4px 8px rgba(0, 28, 61, 0.06);
+  --shadow-focus: 0 0 0 3px rgba(0, 162, 219, 0.35);
+
+  /* ---- Motion ---- */
+  --ease-standard: cubic-bezier(0.2, 0.6, 0.2, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --dur-fast: 140ms;
+  --dur-med: 240ms;
+  --dur-slow: 400ms;
+}
+
+/* --------------------------------------------------------------------------
+   SEMANTIC ELEMENT STYLES
+   -------------------------------------------------------------------------- */
+
+html {
+  font-size: var(--fs-body);
+  color: var(--fg-1);
+  background: var(--bg-1);
+}
+
+body {
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--fg-1);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1, .h1, h2, .h2, h3, .h3, h4, .h4, .display {
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: var(--fg-1);
+  line-height: var(--lh-heading);
+  letter-spacing: var(--tracking-tight);
+  margin: 0 0 var(--sp-4);
+}
+
+.display { font-size: var(--fs-display); line-height: var(--lh-tight); }
+h1, .h1 { font-size: var(--fs-h1); }
+h2, .h2 { font-size: var(--fs-h2); }
+h3, .h3 { font-size: var(--fs-h3); }
+h4, .h4 { font-size: var(--fs-h4); }
+
+p { margin: 0 0 var(--sp-4); }
+p.lead { font-size: 18px; color: var(--fg-2); }
+.small, small { font-size: var(--fs-small); }
+.micro { font-size: var(--fs-micro); color: var(--fg-3); }
+
+.eyebrow {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: var(--fs-micro);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+  color: var(--dex-bright-orange);
+}
+
+a { color: var(--link); text-decoration: none; transition: color var(--dur-fast) var(--ease-out); }
+a:hover { color: var(--link-hover); text-decoration: underline; text-underline-offset: 3px; }
+
+code, kbd, pre, samp {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  background: var(--bg-3);
+  padding: 0.12em 0.4em;
+  border-radius: var(--radius-sm);
+  color: var(--fg-1);
+}
+pre { padding: var(--sp-4); overflow-x: auto; line-height: var(--lh-body); }
+
+/* Wordmark — canonical "DEX" (light-blue, Open Sans Bold, uppercase)
+   + "LAB" (orange, custom hand-drawn brush cap — approximated with
+   Paytone One / Lilita One as a display proxy; use the PNG logo for
+   final applications). Both halves ALL CAPS, stacked, never separated. */
+@import url('https://fonts.googleapis.com/css2?family=Paytone+One&display=swap');
+
+.wordmark {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+.wordmark .dex {
+  color: var(--dex-light-blue);
+  font-family: var(--font-display);
+  letter-spacing: 0.02em;
+}
+.wordmark .lab {
+  color: var(--dex-bright-orange);
+  font-family: 'Paytone One', 'Open Sans', sans-serif;
+  letter-spacing: 0.04em;
+}
+.wordmark.mono .dex,
+.wordmark.mono .lab { color: var(--dex-deep-blue); }

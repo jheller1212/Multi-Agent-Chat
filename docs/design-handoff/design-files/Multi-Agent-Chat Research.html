@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Multi-Agent-Chat — Research</title>
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="screens/library.css">
+<link rel="stylesheet" href="screens/builder.css">
+<link rel="stylesheet" href="screens/run.css">
+<link rel="stylesheet" href="screens/transcript.css">
+<style>
+  html, body { height: 100%; margin: 0; }
+  body { background: #E5E9EE; }
+  [data-theme="dark"] body { background: #050C19; }
+
+  /* The artboard wrapper. Each artboard renders a self-contained AppShell. */
+  .artboard-app {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: var(--surface-canvas);
+    border-radius: 4px;
+  }
+</style>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel" src="design-canvas.jsx"></script>
+  <script type="text/babel" src="tweaks-panel.jsx"></script>
+  <script type="text/babel" src="shell.jsx"></script>
+  <script type="text/babel" src="screens/library.jsx"></script>
+  <script type="text/babel" src="screens/builder.jsx"></script>
+  <script type="text/babel" src="screens/run.jsx"></script>
+  <script type="text/babel" src="screens/transcript.jsx"></script>
+
+  <script type="text/babel">
+    /* global React, ReactDOM, DesignCanvas, DCSection, DCArtboard,
+              AppShell, Library, ScenarioBuilder, RunDashboard, TranscriptViewer,
+              TweaksPanel, useTweaks, TweakRadio, TweakToggle, TweakSection */
+
+    const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+      "density": "compact",
+      "theme": "light"
+    }/*EDITMODE-END*/;
+
+    function ArtboardApp({ page, breadcrumb, density, theme, children }) {
+      // Each artboard hosts a full AppShell with the chosen page rendered in it.
+      return (
+        <div className="artboard-app" data-density={density} data-theme={theme}>
+          <AppShell page={page} breadcrumb={breadcrumb} density={density} theme={theme}
+                    onTheme={() => {}}>
+            {children}
+          </AppShell>
+        </div>
+      );
+    }
+
+    function App() {
+      const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
+      const { density, theme } = tweaks;
+
+      // Set on document for any global descendants (the canvas itself)
+      React.useEffect(() => {
+        document.documentElement.setAttribute('data-theme', theme);
+      }, [theme]);
+
+      // Artboard sizes — chosen so internal density stays comfortable
+      const W = 1480, H = 1000;
+      const TVH = 1040;
+
+      return (
+        <>
+          <DesignCanvas title="Multi-Agent-Chat · Research module"
+            subtitle="DEXLab × ai2aichat — hybrid research console · 4 hi-fi screens">
+
+            <DCSection id="overview" title="Research module" subtitle="A new section in AI2AI-Chat for academics running multi-agent LLM experiments. DEXLab tokens (Deep Blue / Light Blue / Orange) on an ai2aichat-style chrome.">
+
+              <DCArtboard id="library" label="01 · Library" width={W} height={H}>
+                <ArtboardApp page="library" breadcrumb={['Research', 'Library']} density={density} theme={theme}>
+                  <Library/>
+                </ArtboardApp>
+              </DCArtboard>
+
+              <DCArtboard id="builder" label="02 · Scenario Builder" width={W} height={H}>
+                <ArtboardApp page="scenario" breadcrumb={['Research', 'Scenarios', 'B2B Renegotiation']} density={density} theme={theme}>
+                  <ScenarioBuilder/>
+                </ArtboardApp>
+              </DCArtboard>
+
+              <DCArtboard id="run" label="03 · Run Dashboard" width={W} height={H}>
+                <ArtboardApp page="runs" breadcrumb={['Research', 'Runs', 'Run #14']} density={density} theme={theme}>
+                  <RunDashboard/>
+                </ArtboardApp>
+              </DCArtboard>
+
+              <DCArtboard id="transcript" label="04 · Transcript Viewer" width={W} height={TVH}>
+                <ArtboardApp page="runs" breadcrumb={['Research', 'Runs', 'Run #14', 'd_0247']} density={density} theme={theme}>
+                  <TranscriptViewer/>
+                </ArtboardApp>
+              </DCArtboard>
+            </DCSection>
+          </DesignCanvas>
+
+          <TweaksPanel title="Tweaks">
+            <TweakSection title="Display">
+              <TweakRadio label="Density" value={density}
+                          onChange={(v) => setTweak('density', v)}
+                          options={[
+                            { value: 'spacious', label: 'Spacious' },
+                            { value: 'compact', label: 'Compact' },
+                          ]}/>
+              <TweakRadio label="Theme" value={theme}
+                          onChange={(v) => setTweak('theme', v)}
+                          options={[
+                            { value: 'light', label: 'Light' },
+                            { value: 'dark', label: 'Dark' },
+                          ]}/>
+            </TweakSection>
+          </TweaksPanel>
+        </>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+  </script>
+</body>
+</html>

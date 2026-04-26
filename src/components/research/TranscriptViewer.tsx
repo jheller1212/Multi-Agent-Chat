@@ -1,0 +1,904 @@
+import React from 'react';
+import { Icon } from './Icon';
+
+/* ── Static data ── */
+
+const META = {
+  cell: 'A4',
+  dyad: 'd_0247',
+  factors: { buyer_capability: 'strong', seller_provider: 'Mistral' },
+  models: {
+    buyer: 'Anthropic · claude-sonnet-4.5',
+    seller: 'Mistral · mistral-large',
+    judge: 'OpenAI · gpt-4o-mini',
+    analyst: 'Anthropic · claude-haiku-4.5',
+  },
+  seed: 4719,
+  rounds: 7,
+  outcome: 'deal',
+  finalPrice: '€82.50',
+  duration: '38s',
+  tokens: '12,408',
+};
+
+interface Turn {
+  round: number;
+  agent: 'buyer' | 'seller';
+  text: string;
+  offer: { price?: number; vol?: number; term?: number };
+}
+
+const TURNS: Turn[] = [
+  { round: 1, agent: 'buyer', text: "Good afternoon — I'd like to revisit our supply contract. Given current market conditions and our volume of 50,000 units, we're targeting €78 per unit on a 12-month term.", offer: { price: 78, vol: 50000 } },
+  { round: 1, agent: 'seller', text: "Thanks for opening with a number. €78 is well below where we can deliver at scale. Our floor for that volume is €92 — but I have flexibility on payment terms and I can hold a lock for 18 months.", offer: { price: 92, vol: 50000, term: 18 } },
+  { round: 2, agent: 'buyer', text: "I appreciate the offer to lock the price longer, but 18 months locks us into a unit cost we can't justify. We can move to €82 on a 12-month — that gets us within striking distance of our budget.", offer: { price: 82, vol: 50000 } },
+  { round: 2, agent: 'seller', text: "€82 is closer. To meet you there I'd need either volume guarantees of 60k or net-30 terms cut to net-15. Which works better for your team?", offer: { price: 82, vol: 60000 } },
+  { round: 3, agent: 'buyer', text: "We can't move to 60k — that's a real capacity question on our end. Net-15 we can do, given the unit price comes in at €82.", offer: { price: 82, vol: 50000, term: 12 } },
+  { round: 3, agent: 'seller', text: "Then €82.50 with net-15, 12-month — that's the lowest I can take this. If we're aligned, I'll send the term sheet today.", offer: { price: 82.5, vol: 50000, term: 12 } },
+  { round: 4, agent: 'buyer', text: "€82.50 net-15 12-month works. Send the term sheet — we'll counter-sign tomorrow. [ACCEPT]", offer: { price: 82.5, vol: 50000 } },
+];
+
+interface JudgeDecision {
+  round: number;
+  label: 'cooperative' | 'competitive';
+  conf: number;
+  rat: string;
+}
+
+const JUDGE: JudgeDecision[] = [
+  { round: 1, label: 'cooperative', conf: 0.78, rat: 'Both sides open with concrete numbers and frame the gap honestly. No posturing.' },
+  { round: 2, label: 'competitive', conf: 0.62, rat: 'Seller introduces conditional asks (volume, net-15) tied to price concessions — characteristic distributive move.' },
+  { round: 3, label: 'cooperative', conf: 0.84, rat: 'Buyer accepts a non-price concession (net-15) to bridge price. Mutual movement on different issues.' },
+  { round: 4, label: 'cooperative', conf: 0.91, rat: 'Closure with [ACCEPT]; no walkaway, no late posturing. Terminal cooperative.' },
+];
+
+const AGENTS = [
+  { name: 'Buyer', role: 'Domain', avatar: 'B', col: 'blue' as const, model: 'claude-sonnet-4.5', prov: 'Anthropic', temp: 0.7 },
+  { name: 'Seller', role: 'Domain', avatar: 'S', col: 'orange' as const, model: 'mistral-large', prov: 'Mistral', temp: 0.7 },
+  { name: 'Judge', role: 'Supervisor', avatar: 'J', col: 'grey' as const, model: 'gpt-4o-mini', prov: 'OpenAI', temp: 0.0 },
+  { name: 'Analyst', role: 'Supervisor', avatar: 'A', col: 'grey' as const, model: 'claude-haiku-4.5', prov: 'Anthropic', temp: 0.0 },
+];
+
+const SLOTS: [string, string][] = [
+  ['BUYER_TARGET_PRICE', '78'],
+  ['BUYER_WALKAWAY', '92'],
+  ['SELLER_FLOOR_PRICE', '80'],
+  ['VOLUME_TARGET', '50,000'],
+  ['BUYER_CAPABILITY', 'strong'],
+];
+
+const META_STRIP: { key: string; value: string; mono?: boolean; num?: boolean }[] = [
+  { key: 'Cell', value: META.cell, mono: true },
+  { key: 'buyer_capability', value: META.factors.buyer_capability },
+  { key: 'seller_provider', value: META.factors.seller_provider },
+  { key: 'Seed', value: String(META.seed), mono: true },
+  { key: 'Rounds', value: `${META.rounds}/12`, num: true },
+  { key: 'Tokens', value: META.tokens, num: true },
+  { key: 'Duration', value: META.duration },
+];
+
+const OUTCOME_JSON = `{
+  "outcome": "deal",
+  "final_price": 82.50,
+  "volume": 50000,
+  "term_months": 12,
+  "payment": "net-15",
+  "rounds_used": 7,
+  "buyer_surplus": 9.50,
+  "seller_surplus": 2.50,
+  "joint_surplus": 12.00
+}`;
+
+/* ── Helpers ── */
+
+function avatarBg(col: 'blue' | 'orange' | 'grey'): string {
+  if (col === 'blue') return 'var(--accent-2-soft)';
+  if (col === 'orange') return 'var(--accent-1-soft)';
+  return 'var(--surface-sunken)';
+}
+
+function avatarColor(col: 'blue' | 'orange' | 'grey'): string {
+  if (col === 'blue') return 'var(--accent-2)';
+  if (col === 'orange') return 'var(--accent-1)';
+  return 'var(--text-3)';
+}
+
+function chipColor(label: string): { bg: string; color: string } {
+  if (label === 'cooperative') return { bg: 'rgba(46,163,107,0.10)', color: 'var(--success)' };
+  if (label === 'competitive') return { bg: 'var(--accent-1-soft)', color: 'var(--accent-1)' };
+  return { bg: 'var(--surface-sunken)', color: 'var(--text-3)' };
+}
+
+function barFillColor(conf: number): string {
+  if (conf > 0.8) return 'var(--success)';
+  if (conf > 0.6) return 'var(--accent-2)';
+  return 'var(--accent-1)';
+}
+
+/* ── Sub-components ── */
+
+function TurnBubble({ t }: { t: Turn }) {
+  const isBuyer = t.agent === 'buyer';
+  const hasAccept = t.text.includes('[ACCEPT]');
+  const bodyText = hasAccept ? t.text.replace(/\[ACCEPT\]/g, '').trim() : t.text;
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        gap: 10,
+        maxWidth: '86%',
+        alignSelf: isBuyer ? 'flex-start' : 'flex-end',
+        flexDirection: isBuyer ? 'row' : 'row-reverse',
+      }}
+    >
+      {/* Avatar */}
+      <div
+        style={{
+          width: 28,
+          height: 28,
+          borderRadius: 8,
+          display: 'grid',
+          placeItems: 'center',
+          fontFamily: 'var(--font-h)',
+          fontSize: 12,
+          fontWeight: 700,
+          flexShrink: 0,
+          background: isBuyer ? 'var(--accent-2-soft)' : 'var(--accent-1-soft)',
+          color: isBuyer ? 'var(--accent-2)' : 'var(--accent-1)',
+        }}
+      >
+        {isBuyer ? 'B' : 'S'}
+      </div>
+
+      {/* Bubble */}
+      <div
+        style={{
+          background: isBuyer ? 'var(--surface-panel)' : 'rgba(232,78,16,0.04)',
+          border: `1px solid ${isBuyer ? 'var(--line-1)' : 'rgba(232,78,16,0.18)'}`,
+          borderRadius: 12,
+          ...(isBuyer
+            ? { borderTopLeftRadius: 4 }
+            : { borderTopRightRadius: 4 }),
+          padding: '12px 16px',
+          flex: 1,
+          minWidth: 0,
+        }}
+      >
+        {/* Meta row */}
+        <div
+          style={{
+            display: 'flex',
+            gap: 8,
+            alignItems: 'baseline',
+            marginBottom: 6,
+          }}
+        >
+          <span
+            style={{
+              fontFamily: 'var(--font-h)',
+              fontSize: 12.5,
+              fontWeight: 700,
+              color: 'var(--text-1)',
+            }}
+          >
+            {isBuyer ? 'Buyer' : 'Seller'}
+          </span>
+          <span
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 10.5,
+              color: 'var(--text-3)',
+            }}
+          >
+            {isBuyer ? 'claude-sonnet-4.5' : 'mistral-large'}
+          </span>
+          <span
+            style={{
+              marginLeft: 'auto',
+              fontSize: 10.5,
+              color: 'var(--text-4)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.06em',
+            }}
+          >
+            round {t.round}
+          </span>
+        </div>
+
+        {/* Body text */}
+        <div style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text-1)' }}>
+          {bodyText}
+          {hasAccept && (
+            <span
+              style={{
+                display: 'inline-block',
+                marginLeft: 6,
+                fontFamily: 'var(--font-mono)',
+                fontSize: 11,
+                fontWeight: 700,
+                color: 'var(--success)',
+                background: 'rgba(46,163,107,0.10)',
+                padding: '1px 7px',
+                borderRadius: 3,
+              }}
+            >
+              [ACCEPT]
+            </span>
+          )}
+        </div>
+
+        {/* Offer footer */}
+        {t.offer && (
+          <div
+            style={{
+              display: 'flex',
+              gap: 6,
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              marginTop: 10,
+              paddingTop: 8,
+              borderTop: '1px dashed var(--line-1)',
+              fontSize: 11,
+            }}
+          >
+            <span
+              style={{
+                textTransform: 'uppercase',
+                letterSpacing: '0.06em',
+                color: 'var(--text-4)',
+                fontWeight: 600,
+                fontSize: 10,
+              }}
+            >
+              offer extracted
+            </span>
+            {t.offer.price != null && (
+              <span style={offerPillStyle}>{'\u20AC'}{t.offer.price}</span>
+            )}
+            {t.offer.vol != null && (
+              <span style={offerPillStyle}>{t.offer.vol.toLocaleString()}u</span>
+            )}
+            {t.offer.term != null && (
+              <span style={offerPillStyle}>{t.offer.term}mo</span>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const offerPillStyle: React.CSSProperties = {
+  fontFamily: 'var(--font-mono)',
+  fontSize: 11,
+  background: 'var(--surface-sunken)',
+  padding: '1px 7px',
+  borderRadius: 3,
+  color: 'var(--text-1)',
+  fontWeight: 600,
+};
+
+function RoundDivider({ round }: { round: number }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '8px 0' }}>
+      <span style={{ flex: 1, height: 1, background: 'var(--line-1)' }} />
+      <span
+        style={{
+          fontFamily: 'var(--font-ui)',
+          fontSize: 10.5,
+          textTransform: 'uppercase',
+          letterSpacing: '0.08em',
+          color: 'var(--text-4)',
+          fontWeight: 600,
+        }}
+      >
+        round {round}
+      </span>
+      <span style={{ flex: 1, height: 1, background: 'var(--line-1)' }} />
+    </div>
+  );
+}
+
+function JudgeCard({ j }: { j: JudgeDecision }) {
+  const chip = chipColor(j.label);
+  return (
+    <div
+      style={{
+        background: 'var(--surface-panel)',
+        border: '1px solid var(--line-1)',
+        borderRadius: 6,
+        padding: '10px 12px',
+      }}
+    >
+      {/* Head */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: 6,
+        }}
+      >
+        <span
+          style={{
+            fontFamily: 'var(--font-h)',
+            fontSize: 11,
+            fontWeight: 700,
+            textTransform: 'uppercase',
+            letterSpacing: '0.06em',
+            color: 'var(--text-3)',
+          }}
+        >
+          Round {j.round}
+        </span>
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
+            fontFamily: 'var(--font-ui)',
+            fontSize: 11,
+            fontWeight: 600,
+            padding: '3px 9px',
+            borderRadius: 'var(--radius-pill)',
+            background: chip.bg,
+            color: chip.color,
+          }}
+        >
+          {j.label}
+        </span>
+      </div>
+
+      {/* Confidence bar */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+        <div
+          style={{
+            flex: 1,
+            height: 4,
+            background: 'var(--surface-sunken)',
+            borderRadius: 2,
+            overflow: 'hidden',
+          }}
+        >
+          <div
+            style={{
+              height: '100%',
+              width: `${j.conf * 100}%`,
+              borderRadius: 2,
+              background: barFillColor(j.conf),
+            }}
+          />
+        </div>
+        <span
+          style={{
+            fontFamily: 'var(--font-num)',
+            fontFeatureSettings: '"tnum"',
+            fontSize: 11,
+            color: 'var(--text-3)',
+          }}
+        >
+          {(j.conf * 100).toFixed(0)}%
+        </span>
+      </div>
+
+      {/* Rationale */}
+      <div style={{ fontSize: 11.5, color: 'var(--text-2)', lineHeight: 1.5 }}>{j.rat}</div>
+    </div>
+  );
+}
+
+/* ── Section header ── */
+
+function SideHeader({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+  return (
+    <div
+      style={{
+        fontSize: 10.5,
+        textTransform: 'uppercase',
+        letterSpacing: '0.08em',
+        color: 'var(--text-4)',
+        fontWeight: 700,
+        marginBottom: 8,
+        fontFamily: 'var(--font-ui)',
+        ...style,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+/* ── Main component ── */
+
+export function TranscriptViewer() {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {/* ── Page head ── */}
+      <div
+        style={{
+          padding: '16px 24px 12px',
+          borderBottom: '1px solid var(--line-1)',
+          background: 'var(--surface-panel)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+          <div>
+            {/* Breadcrumb */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                fontSize: 12,
+                color: 'var(--text-3)',
+              }}
+            >
+              <a href="#" style={{ color: 'var(--accent-2)', textDecoration: 'none' }}>Run #14</a>
+              <Icon name="chevron" size={12} />
+              <a href="#" style={{ color: 'var(--accent-2)', textDecoration: 'none' }}>Cell {META.cell}</a>
+              <Icon name="chevron" size={12} />
+              <span style={{ fontFamily: 'var(--font-mono)' }}>{META.dyad}</span>
+            </div>
+
+            {/* Title */}
+            <h1
+              style={{
+                fontFamily: 'var(--font-h)',
+                fontSize: 19,
+                fontWeight: 700,
+                letterSpacing: '-0.01em',
+                margin: '6px 0 0',
+                color: 'var(--text-1)',
+                display: 'flex',
+                alignItems: 'center',
+              }}
+            >
+              Dyad{' '}
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 18, marginLeft: 4 }}>
+                {META.dyad}
+              </span>
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  marginLeft: 12,
+                  fontFamily: 'var(--font-ui)',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  padding: '3px 9px',
+                  borderRadius: 'var(--radius-pill)',
+                  background: 'rgba(46,163,107,0.10)',
+                  color: 'var(--success)',
+                }}
+              >
+                <Icon name="check" size={11} stroke={2.5} /> Deal · {META.finalPrice}
+              </span>
+            </h1>
+          </div>
+
+          {/* Right nav */}
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <button className="r-btn r-btn-ghost r-btn-sm">
+              <Icon name="chevron" size={13} stroke={2} /> Prev dyad
+            </button>
+            <button className="r-btn r-btn-ghost r-btn-sm">
+              Next dyad <Icon name="arrowRight" size={13} />
+            </button>
+            <button className="r-btn r-btn-secondary r-btn-sm">
+              <Icon name="download" size={13} /> Export JSON
+            </button>
+          </div>
+        </div>
+
+        {/* Meta strip */}
+        <div
+          style={{
+            display: 'flex',
+            gap: 18,
+            flexWrap: 'wrap',
+            marginTop: 14,
+            padding: '10px 14px',
+            background: 'var(--surface-sunken)',
+            border: '1px solid var(--line-1)',
+            borderRadius: 6,
+          }}
+        >
+          {META_STRIP.map((m) => (
+            <div key={m.key} style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <span
+                style={{
+                  fontSize: 10,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.06em',
+                  color: 'var(--text-4)',
+                  fontWeight: 600,
+                }}
+              >
+                {m.key}
+              </span>
+              <span
+                style={{
+                  fontSize: 12.5,
+                  color: 'var(--text-1)',
+                  fontWeight: 600,
+                  ...(m.mono ? { fontFamily: 'var(--font-mono)' } : {}),
+                  ...(m.num
+                    ? {
+                        fontFamily: 'var(--font-num)',
+                        fontFeatureSettings: '"tnum"',
+                        fontVariantNumeric: 'tabular-nums' as const,
+                      }
+                    : {}),
+                }}
+              >
+                {m.value}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── 3-column body ── */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '240px 1fr 340px',
+          gap: 0,
+          flex: 1,
+          minHeight: 0,
+        }}
+      >
+        {/* ── Left rail ── */}
+        <div
+          style={{
+            borderRight: '1px solid var(--line-1)',
+            background: 'var(--surface-rail)',
+            padding: '18px 16px',
+            overflow: 'auto',
+          }}
+        >
+          <SideHeader>Agents</SideHeader>
+          {AGENTS.map((a) => (
+            <div
+              key={a.name}
+              style={{
+                display: 'flex',
+                gap: 10,
+                alignItems: 'flex-start',
+                padding: '8px 10px',
+                borderRadius: 6,
+                background: 'var(--surface-panel)',
+                border: '1px solid var(--line-1)',
+                marginBottom: 6,
+              }}
+            >
+              <div
+                style={{
+                  width: 26,
+                  height: 26,
+                  borderRadius: 6,
+                  display: 'grid',
+                  placeItems: 'center',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  fontFamily: 'var(--font-h)',
+                  flexShrink: 0,
+                  background: avatarBg(a.col),
+                  color: avatarColor(a.col),
+                }}
+              >
+                {a.avatar}
+              </div>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-1)' }}>
+                  {a.name}{' '}
+                  <span style={{ color: 'var(--text-3)', fontWeight: 400, fontSize: 11 }}>
+                    · {a.role}
+                  </span>
+                </div>
+                <div
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 10.5,
+                    color: 'var(--text-3)',
+                    marginTop: 1,
+                  }}
+                >
+                  {a.prov} · {a.model}
+                </div>
+                <div style={{ fontSize: 10.5, color: 'var(--text-4)' }}>
+                  temp {a.temp.toFixed(2)}
+                </div>
+              </div>
+            </div>
+          ))}
+
+          <SideHeader style={{ marginTop: 18 }}>Slot bindings</SideHeader>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {SLOTS.map(([k, v]) => (
+              <div
+                key={k}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '4px 8px',
+                  background: 'var(--surface-panel)',
+                  border: '1px solid var(--line-1)',
+                  borderRadius: 4,
+                }}
+              >
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 10.5,
+                    fontWeight: 600,
+                    color: 'var(--accent-2)',
+                    background: 'var(--accent-2-soft)',
+                    padding: '1px 5px',
+                    borderRadius: 3,
+                  }}
+                >
+                  {k}
+                </span>
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 11,
+                    color: 'var(--text-1)',
+                    fontWeight: 600,
+                  }}
+                >
+                  {v}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <SideHeader style={{ marginTop: 18 }}>Anomalies</SideHeader>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: 12,
+              color: 'var(--success)',
+              background: 'rgba(46,163,107,0.08)',
+              padding: '8px 12px',
+              borderRadius: 6,
+            }}
+          >
+            <Icon name="check" size={12} stroke={2.5} /> No anomalies flagged
+          </div>
+        </div>
+
+        {/* ── Center column ── */}
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            background: 'var(--surface-canvas)',
+            overflow: 'hidden',
+          }}
+        >
+          {/* Transcript header */}
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '12px 24px',
+              background: 'var(--surface-panel)',
+              borderBottom: '1px solid var(--line-1)',
+            }}
+          >
+            <h3
+              style={{
+                fontFamily: 'var(--font-h)',
+                fontSize: 14,
+                fontWeight: 700,
+                margin: 0,
+                color: 'var(--text-1)',
+              }}
+            >
+              Transcript
+            </h3>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button
+                style={{
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  fontFamily: 'var(--font-ui)',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  padding: '3px 9px',
+                  borderRadius: 'var(--radius-pill)',
+                  border: 'none',
+                  background: 'var(--accent-2-soft)',
+                  color: 'var(--accent-2)',
+                }}
+              >
+                Show offers
+              </button>
+              <button
+                style={{
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  fontFamily: 'var(--font-ui)',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  padding: '3px 9px',
+                  borderRadius: 'var(--radius-pill)',
+                  border: 'none',
+                  background: 'var(--surface-sunken)',
+                  color: 'var(--text-3)',
+                }}
+              >
+                Tokens
+              </button>
+              <button
+                style={{
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  fontFamily: 'var(--font-ui)',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  padding: '3px 9px',
+                  borderRadius: 'var(--radius-pill)',
+                  border: 'none',
+                  background: 'var(--surface-sunken)',
+                  color: 'var(--text-3)',
+                }}
+              >
+                Hide system
+              </button>
+            </div>
+          </div>
+
+          {/* Transcript stream */}
+          <div
+            style={{
+              flex: 1,
+              overflow: 'auto',
+              padding: '24px 24px 40px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 14,
+            }}
+          >
+            {/* System top */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                fontSize: 11.5,
+                color: 'var(--text-3)',
+                background: 'var(--surface-panel)',
+                border: '1px dashed var(--line-2)',
+                borderRadius: 6,
+                padding: '8px 14px',
+                alignSelf: 'center',
+                maxWidth: '80%',
+              }}
+            >
+              <Icon name="settings" size={12} /> System turn — slots bound · seed {META.seed} · turn
+              order: <strong>buyer → seller</strong>
+            </div>
+
+            {/* Turn bubbles with round dividers */}
+            {TURNS.map((t, i) => (
+              <React.Fragment key={i}>
+                {i > 0 && t.round !== TURNS[i - 1].round && (
+                  <RoundDivider round={t.round} />
+                )}
+                <TurnBubble t={t} />
+              </React.Fragment>
+            ))}
+
+            {/* System bottom */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                fontSize: 11.5,
+                color: 'var(--success)',
+                background: 'rgba(46,163,107,0.04)',
+                border: '1px dashed var(--success)',
+                borderRadius: 6,
+                padding: '8px 14px',
+                alignSelf: 'center',
+                maxWidth: '80%',
+              }}
+            >
+              <Icon name="check" size={12} stroke={2.5} /> [ACCEPT] token detected · run
+              terminated · final price{' '}
+              <strong style={{ color: 'var(--text-1)' }}>{META.finalPrice}</strong> · 7 rounds · 38s
+            </div>
+          </div>
+        </div>
+
+        {/* ── Right rail ── */}
+        <div
+          style={{
+            borderLeft: '1px solid var(--line-1)',
+            background: 'var(--surface-rail)',
+            padding: '18px 16px',
+            overflow: 'auto',
+          }}
+        >
+          <SideHeader>Supervisor decisions</SideHeader>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {JUDGE.map((j) => (
+              <JudgeCard key={j.round} j={j} />
+            ))}
+          </div>
+
+          <SideHeader style={{ marginTop: 16 }}>Analyst extractions</SideHeader>
+          <div
+            style={{
+              background: 'var(--surface-panel)',
+              border: '1px solid var(--line-1)',
+              borderRadius: 6,
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                fontSize: 11,
+                textTransform: 'uppercase',
+                letterSpacing: '0.06em',
+                color: 'var(--text-4)',
+                fontWeight: 700,
+                padding: '8px 12px',
+                borderBottom: '1px solid var(--line-1)',
+                background: 'var(--surface-sunken)',
+              }}
+            >
+              Final outcome JSON
+            </div>
+            <pre
+              style={{
+                margin: 0,
+                padding: '10px 12px',
+                fontFamily: 'var(--font-mono)',
+                fontSize: 11,
+                lineHeight: 1.55,
+                color: 'var(--text-1)',
+                background: 'var(--surface-panel)',
+                whiteSpace: 'pre',
+              }}
+            >
+              {OUTCOME_JSON}
+            </pre>
+          </div>
+
+          {/* Action buttons */}
+          <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+            <button
+              className="r-btn r-btn-secondary r-btn-sm"
+              style={{ flex: 1, justifyContent: 'center' }}
+            >
+              <Icon name="copy" size={12} /> Copy
+            </button>
+            <button
+              className="r-btn r-btn-ghost r-btn-sm"
+              style={{ flex: 1, justifyContent: 'center' }}
+            >
+              View raw
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
