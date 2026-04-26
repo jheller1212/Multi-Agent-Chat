@@ -143,7 +143,7 @@ function App() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (session) {
-        setView(URL_PARAMS.viewParam === 'research' ? 'research' : 'app');
+        setView(URL_PARAMS.viewParam === 'quickchat' ? 'app' : 'research');
         restoreVault().catch(() => {});
         loadWorkshop().catch(() => {});
       }
