@@ -5,6 +5,7 @@ interface ResearchShellProps {
   activePage: string;
   breadcrumb: string[];
   children: ReactNode;
+  onNavClick?: (page: string) => void;
 }
 
 function BrandMark() {
@@ -156,11 +157,12 @@ function Topbar({ breadcrumb }: { breadcrumb: string[] }) {
   );
 }
 
-function NavItem({ id, label, icon, badge, active }: {
-  id: string; label: string; icon: string; badge?: string; active: boolean;
+function NavItem({ id, label, icon, badge, active, onClick }: {
+  id: string; label: string; icon: string; badge?: string; active: boolean; onClick?: () => void;
 }) {
   return (
     <div
+      onClick={onClick}
       style={{
         display: 'flex', alignItems: 'center', gap: 10,
         padding: '8px 12px', borderRadius: 6,
@@ -191,7 +193,7 @@ function NavItem({ id, label, icon, badge, active }: {
   );
 }
 
-function Sidebar({ activePage }: { activePage: string }) {
+function Sidebar({ activePage, onNavClick }: { activePage: string; onNavClick?: (page: string) => void }) {
   return (
     <div
       style={{
@@ -210,8 +212,8 @@ function Sidebar({ activePage }: { activePage: string }) {
       }}>
         Workspace
       </div>
-      <NavItem id="chat" label="Quick Chat" icon="chat" active={activePage === 'chat'} />
-      <NavItem id="history" label="History" icon="clock" active={activePage === 'history'} />
+      <NavItem id="chat" label="Quick Chat" icon="chat" active={activePage === 'chat'} onClick={() => onNavClick?.('chat')} />
+      <NavItem id="history" label="History" icon="clock" active={activePage === 'history'} onClick={() => onNavClick?.('history')} />
 
       <div style={{
         fontSize: 10.5, textTransform: 'uppercase' as const, letterSpacing: '0.08em',
@@ -220,11 +222,11 @@ function Sidebar({ activePage }: { activePage: string }) {
       }}>
         Research
       </div>
-      <NavItem id="library" label="Library" icon="library" active={activePage === 'library'} />
-      <NavItem id="scenario" label="Scenarios" icon="book" badge="12" active={activePage === 'scenario'} />
-      <NavItem id="experiment" label="Experiments" icon="flask" badge="4" active={activePage === 'experiment'} />
-      <NavItem id="runs" label="Runs" icon="play" badge="2" active={activePage === 'runs'} />
-      <NavItem id="results" label="Results" icon="chart" active={activePage === 'results'} />
+      <NavItem id="library" label="Library" icon="library" active={activePage === 'library'} onClick={() => onNavClick?.('library')} />
+      <NavItem id="scenario" label="Scenarios" icon="book" badge="12" active={activePage === 'scenario'} onClick={() => onNavClick?.('scenario')} />
+      <NavItem id="experiment" label="Experiments" icon="flask" badge="4" active={activePage === 'experiment'} onClick={() => onNavClick?.('experiment')} />
+      <NavItem id="runs" label="Runs" icon="play" badge="2" active={activePage === 'runs'} onClick={() => onNavClick?.('runs')} />
+      <NavItem id="results" label="Results" icon="chart" active={activePage === 'results'} onClick={() => onNavClick?.('results')} />
 
       <div style={{
         fontSize: 10.5, textTransform: 'uppercase' as const, letterSpacing: '0.08em',
@@ -261,7 +263,7 @@ function Sidebar({ activePage }: { activePage: string }) {
   );
 }
 
-export function ResearchShell({ activePage, breadcrumb, children }: ResearchShellProps) {
+export function ResearchShell({ activePage, breadcrumb, children, onNavClick }: ResearchShellProps) {
   return (
     <div
       data-density="compact"
@@ -277,7 +279,7 @@ export function ResearchShell({ activePage, breadcrumb, children }: ResearchShel
       }}
     >
       <Topbar breadcrumb={breadcrumb} />
-      <Sidebar activePage={activePage} />
+      <Sidebar activePage={activePage} onNavClick={onNavClick} />
       <div style={{ gridColumn: 2, gridRow: 2, overflow: 'auto', position: 'relative' }}>
         {children}
       </div>

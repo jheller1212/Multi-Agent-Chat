@@ -9,6 +9,7 @@ const ResearchInterface = lazy(() => import('./components/ResearchInterface').th
 const LandingPage = lazy(() => import('./components/LandingPage').then(m => ({ default: m.LandingPage })));
 const PrivacyPolicy = lazy(() => import('./components/PrivacyPolicy').then(m => ({ default: m.PrivacyPolicy })));
 const TermsOfUse = lazy(() => import('./components/TermsOfUse').then(m => ({ default: m.TermsOfUse })));
+const ResearchLayout = lazy(() => import('./components/research/ResearchLayout').then(m => ({ default: m.ResearchLayout })));
 import { clearVault, loadVault, loadVaultFromServer, syncVaultToServer, saveVault } from './lib/apiKeyVault';
 import type { ProviderVault } from './lib/apiKeyVault';
 
@@ -27,17 +28,18 @@ function parseUrlParams() {
   const sessionId = p.get('session_id') ?? undefined;
   const conditionLabel = p.get('condition') ?? undefined;
   const workshop = p.get('workshop') ?? undefined;
+  const viewParam = p.get('view') ?? undefined;
   let sharedConfig: Record<string, unknown> | undefined;
   const cfg = p.get('cfg');
   if (cfg) {
     try { sharedConfig = JSON.parse(atob(cfg)); } catch { /* invalid — ignore */ }
   }
-  return { sessionId, conditionLabel, sharedConfig, workshop };
+  return { sessionId, conditionLabel, sharedConfig, workshop, viewParam };
 }
 
 const URL_PARAMS = parseUrlParams();
 
-type View = 'landing' | 'auth' | 'app' | 'privacy' | 'terms';
+type View = 'landing' | 'auth' | 'app' | 'research' | 'privacy' | 'terms';
 
 function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -141,7 +143,7 @@ function App() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (session) {
-        setView('app');
+        setView(URL_PARAMS.viewParam === 'research' ? 'research' : 'app');
         restoreVault().catch(() => {});
         loadWorkshop().catch(() => {});
       }
@@ -242,6 +244,14 @@ function App() {
 
   if (view === 'auth') {
     return <Suspense fallback={suspenseFallback}>{storageNotice}<Auth onAuthSuccess={() => setView('app')} initialIsSignUp={authMode === 'signup'} workshopInfo={workshopPublicInfo} /></Suspense>;
+  }
+
+  if (view === 'research' && session) {
+    return (
+      <Suspense fallback={suspenseFallback}>
+        <ResearchLayout onBack={() => setView('app')} />
+      </Suspense>
+    );
   }
 
   if (view === 'app' && session) {
