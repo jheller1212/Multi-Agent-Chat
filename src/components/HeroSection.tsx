@@ -10,15 +10,15 @@ export function HeroSection({ onSignUpClick }: HeroSectionProps) {
       <div className="max-w-7xl mx-auto">
         <div className="text-center">
           <h1 className="text-5xl font-bold text-gray-900 mb-4">
-            Two AI models.{' '}
+            Run multi-agent{' '}
             <span className="bg-gradient-to-r from-orange-500 to-sky-500 text-transparent bg-clip-text">
-              One conversation.
+              LLM experiments.
             </span>
           </h1>
           <p className="text-xl text-gray-600 mb-6 max-w-2xl mx-auto">
-            Put GPT, Claude, Gemini, or Mistral in conversation with each other.
-            Test negotiation strategies, brainstorm product ideas, simulate customer
-            interactions, or run controlled research experiments — then export everything as CSV.
+            Configure AI agents, design factorial experiments, and collect structured
+            research data — all from the browser. Built for procurement, law, mediation,
+            and any multi-agent scenario.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-6">
             <button
@@ -28,7 +28,7 @@ export function HeroSection({ onSignUpClick }: HeroSectionProps) {
               Create free account
             </button>
           </div>
-          <p className="text-sm text-gray-500">Free to use · Bring your own API keys</p>
+          <p className="text-sm text-gray-500">Free to use · Bring your own API keys · 6 LLM providers supported</p>
         </div>
       </div>
     </div>

@@ -9,10 +9,10 @@ export function Logo() {
         <Bot className="h-7 w-7 text-sky-500 -ml-2" />
       </div>
       <span className="ml-2 text-xl font-heading font-bold text-lab-heading dark:text-white">
-        AI2AI-Chat
+        Multi-Agent-Chat
       </span>
       <span className="ml-2 text-xs font-medium text-lab-body dark:text-gray-400 tracking-wide uppercase">
-        for Research
+        Research
       </span>
     </div>
   );
