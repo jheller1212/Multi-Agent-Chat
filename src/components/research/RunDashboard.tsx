@@ -1,6 +1,8 @@
+import { useState, useEffect, useCallback } from 'react';
+import { supabase } from '../../lib/supabase';
 import { Icon } from './Icon';
 
-// --- Mock data ---
+// --- Types ---
 
 interface CellData {
   id: string;
@@ -12,7 +14,24 @@ interface CellData {
   status: 'done' | 'running' | 'queued';
 }
 
-const CELLS: CellData[] = [
+interface LiveEvent {
+  t: string;
+  cell: string;
+  dyad: string;
+  kind: 'completed' | 'started' | 'anomaly' | 'failed';
+  msg: string;
+  tone: 'ok' | 'info' | 'warn' | 'err';
+}
+
+interface AnomalyData {
+  tag: string;
+  count: number;
+  ex: string;
+}
+
+// --- Mock data ---
+
+const MOCK_CELLS: CellData[] = [
   { id: 'A1', factors: ['buyer:strong', 'seller:OpenAI'], total: 60, done: 60, failed: 1, anomaly: 2, status: 'done' },
   { id: 'A2', factors: ['buyer:strong', 'seller:Anthropic'], total: 60, done: 60, failed: 0, anomaly: 1, status: 'done' },
   { id: 'A3', factors: ['buyer:strong', 'seller:Google'], total: 60, done: 58, failed: 2, anomaly: 4, status: 'done' },
@@ -23,21 +42,7 @@ const CELLS: CellData[] = [
   { id: 'B4', factors: ['buyer:weak', 'seller:Mistral'], total: 60, done: 0, failed: 0, anomaly: 0, status: 'queued' },
 ];
 
-const totalDone = CELLS.reduce((a, c) => a + c.done, 0);
-const totalFail = CELLS.reduce((a, c) => a + c.failed, 0);
-const totalAnom = CELLS.reduce((a, c) => a + c.anomaly, 0);
-const totalAll = CELLS.reduce((a, c) => a + c.total, 0);
-
-interface LiveEvent {
-  t: string;
-  cell: string;
-  dyad: string;
-  kind: 'completed' | 'started' | 'anomaly' | 'failed';
-  msg: string;
-  tone: 'ok' | 'info' | 'warn' | 'err';
-}
-
-const LIVE: LiveEvent[] = [
+const MOCK_LIVE: LiveEvent[] = [
   { t: '14:32:08', cell: 'A4', dyad: 'd_0247', kind: 'completed', msg: 'deal \u00b7 \u20ac82.50 \u00b7 7 rounds', tone: 'ok' },
   { t: '14:32:04', cell: 'B1', dyad: 'd_0312', kind: 'started', msg: 'turn 1/12', tone: 'info' },
   { t: '14:32:01', cell: 'A4', dyad: 'd_0246', kind: 'anomaly', msg: 'Seller emitted JSON in transcript', tone: 'warn' },
@@ -48,18 +53,40 @@ const LIVE: LiveEvent[] = [
   { t: '14:31:38', cell: 'A4', dyad: 'd_0244', kind: 'completed', msg: 'deal \u00b7 \u20ac81.00 \u00b7 8 rounds', tone: 'ok' },
 ];
 
-interface AnomalyData {
-  tag: string;
-  count: number;
-  ex: string;
-}
-
-const ANOMALIES: AnomalyData[] = [
+const MOCK_ANOMALIES: AnomalyData[] = [
   { tag: 'json-leak', count: 3, ex: 'Seller emitted raw JSON in transcript' },
   { tag: 'role-confusion', count: 2, ex: 'Buyer addressed itself as "the seller"' },
   { tag: 'walkaway-mismatch', count: 1, ex: '[ACCEPT] token but no terminal price' },
   { tag: 'analyst-fail', count: 1, ex: 'Analyst returned non-JSON output' },
 ];
+
+// --- Supabase row types ---
+
+interface ExperimentRunRow {
+  id: string;
+  status: string;
+  config_snapshot: Record<string, unknown> | null;
+  started_at: string | null;
+  completed_at: string | null;
+  progress: {
+    total: number;
+    completed: number;
+    failed: number;
+    running: number;
+    pending: number;
+  } | null;
+}
+
+interface DyadRow {
+  id: string;
+  cell_label: string;
+  factors: Record<string, string>;
+  status: string;
+  started_at: string | null;
+  completed_at: string | null;
+  failure_reason: string | null;
+  termination_reason: string | null;
+}
 
 // --- Sub-components ---
 
@@ -85,7 +112,12 @@ function StatTile({ label, value, sub, tone = 'neutral', ic }: StatTileProps) {
   );
 }
 
-function CellRow({ c }: { c: CellData }) {
+interface CellRowProps {
+  c: CellData;
+  onInspect?: () => void;
+}
+
+function CellRow({ c, onInspect }: CellRowProps) {
   const pct = (c.done / c.total) * 100;
   const fillClass = c.status === 'done' ? 'ok' : c.status === 'queued' ? 'muted' : '';
 
@@ -142,7 +174,7 @@ function CellRow({ c }: { c: CellData }) {
         {c.status === 'queued' && <span className="r-chip r-chip-grey">Queued</span>}
       </div>
       <div>
-        <button className="r-btn r-btn-ghost r-btn-sm">Inspect</button>
+        <button className="r-btn r-btn-ghost r-btn-sm" onClick={onInspect}>Inspect</button>
       </div>
     </div>
   );
@@ -167,14 +199,137 @@ function LiveEventRow({ e }: { e: LiveEvent }) {
   );
 }
 
+// --- Helpers ---
+
+function dyadsToCells(dyads: DyadRow[]): CellData[] {
+  const cellMap = new Map<string, { factors: Record<string, string>; dyads: DyadRow[] }>();
+
+  for (const d of dyads) {
+    const existing = cellMap.get(d.cell_label);
+    if (existing) {
+      existing.dyads.push(d);
+    } else {
+      cellMap.set(d.cell_label, { factors: d.factors, dyads: [d] });
+    }
+  }
+
+  const cells: CellData[] = [];
+  for (const [label, { factors, dyads: cellDyads }] of cellMap) {
+    const done = cellDyads.filter((d) => d.status === 'completed').length;
+    const failed = cellDyads.filter((d) => d.status === 'failed').length;
+    const running = cellDyads.filter((d) => d.status === 'running').length;
+    const total = cellDyads.length;
+
+    let status: CellData['status'] = 'queued';
+    if (done === total) status = 'done';
+    else if (running > 0) status = 'running';
+
+    const factorChips = Object.entries(factors).map(([k, v]) => `${k}:${v}`);
+
+    cells.push({
+      id: label,
+      factors: factorChips,
+      total,
+      done,
+      failed,
+      anomaly: 0, // anomaly data requires supervisor_outputs join — not fetched here
+      status,
+    });
+  }
+
+  return cells;
+}
+
+function formatTime(iso: string | null): string {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
 // --- Main component ---
 
-export function RunDashboard() {
-  const overallPct = (totalDone / totalAll) * 100;
-  const inFlight = 28;
-  const queued = totalAll - totalDone - inFlight;
-  const queuedCells = CELLS.filter((c) => c.status === 'queued').length;
-  const anomPct = ((100 * totalAnom) / totalDone).toFixed(1);
+export interface RunDashboardProps {
+  runId?: string;
+  onInspectDyad?: (dyadId: string) => void;
+}
+
+export function RunDashboard({ runId, onInspectDyad }: RunDashboardProps) {
+  const [run, setRun] = useState<ExperimentRunRow | null>(null);
+  const [dyads, setDyads] = useState<DyadRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const fetchData = useCallback(async () => {
+    if (!runId) return;
+    setLoading(true);
+    try {
+      const [runResult, dyadsResult] = await Promise.all([
+        supabase.from('experiment_runs').select('id, status, config_snapshot, started_at, completed_at, progress').eq('id', runId).single(),
+        supabase.from('dyads').select('id, cell_label, factors, status, started_at, completed_at, failure_reason, termination_reason').eq('run_id', runId),
+      ]);
+      if (runResult.data) setRun(runResult.data as ExperimentRunRow);
+      if (dyadsResult.data) setDyads(dyadsResult.data as DyadRow[]);
+    } finally {
+      setLoading(false);
+    }
+  }, [runId]);
+
+  useEffect(() => {
+    void fetchData();
+  }, [fetchData]);
+
+  const handlePause = async () => {
+    if (!runId) return;
+    setActionError(null);
+    const { error } = await supabase.from('experiment_runs').update({ status: 'paused' }).eq('id', runId);
+    if (error) { setActionError(error.message); return; }
+    setRun((prev) => prev ? { ...prev, status: 'paused' } : prev);
+  };
+
+  const handleAbort = async () => {
+    if (!runId) return;
+    setActionError(null);
+    const { error } = await supabase.from('experiment_runs').update({ status: 'aborted' }).eq('id', runId);
+    if (error) { setActionError(error.message); return; }
+    setRun((prev) => prev ? { ...prev, status: 'aborted' } : prev);
+  };
+
+  // Find first dyad id for each cell (for Inspect button when no specific dyad is selected)
+  const cellFirstDyad = (cellLabel: string): string | undefined => {
+    return dyads.find((d) => d.cell_label === cellLabel)?.id;
+  };
+
+  // --- Derived data ---
+  const isDemo = !runId;
+
+  const cells: CellData[] = isDemo ? MOCK_CELLS : dyadsToCells(dyads);
+  const liveEvents: LiveEvent[] = isDemo ? MOCK_LIVE : [];
+  const anomalies: AnomalyData[] = isDemo ? MOCK_ANOMALIES : [];
+
+  const totalDone = cells.reduce((a, c) => a + c.done, 0);
+  const totalFail = cells.reduce((a, c) => a + c.failed, 0);
+  const totalAnom = cells.reduce((a, c) => a + c.anomaly, 0);
+  const totalAll = cells.reduce((a, c) => a + c.total, 0);
+  const overallPct = totalAll > 0 ? (totalDone / totalAll) * 100 : 0;
+
+  const inFlight = isDemo ? 28 : dyads.filter((d) => d.status === 'running').length;
+  const queued = isDemo ? totalAll - totalDone - inFlight : dyads.filter((d) => d.status === 'pending').length;
+  const queuedCells = cells.filter((c) => c.status === 'queued').length;
+  const anomPct = totalDone > 0 ? ((100 * totalAnom) / totalDone).toFixed(1) : '0.0';
+
+  const runStatus = isDemo ? 'running' : (run?.status ?? 'unknown');
+  const isRunning = runStatus === 'running';
+
+  const configSnapshot = run?.config_snapshot as { name?: string } | null;
+  const runName = configSnapshot?.name ?? (isDemo ? 'Buyer Capability \u00d7 Provider' : runId ?? 'Run');
+  const startedAt = isDemo ? '14:08' : formatTime(run?.started_at ?? null);
+
+  if (!isDemo && loading && !run) {
+    return (
+      <div className="run-page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 60 }}>
+        <span style={{ color: 'var(--text-3)', fontSize: 14 }}>Loading run data...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="run-page">
@@ -197,33 +352,50 @@ export function RunDashboard() {
               </a>
               <Icon name="chevron" size={12} />
               <a href="#" style={{ color: 'var(--text-3)', textDecoration: 'none' }}>
-                Buyer Capability &times; Provider
+                {runName}
               </a>
               <Icon name="chevron" size={12} />
-              <span style={{ color: 'var(--text-1)' }}>Run #14</span>
+              <span style={{ color: 'var(--text-1)' }}>{isDemo ? 'Run #14' : `Run ${runId?.slice(0, 8) ?? ''}`}</span>
             </div>
             <h1 className="r-page-title" style={{ marginTop: 6 }}>
-              <span
-                className="pulse-dot"
-                style={{ width: 8, height: 8, display: 'inline-block', verticalAlign: 'middle', marginRight: 8 }}
-              />{' '}
-              Buyer Capability &times; Provider &middot; Run #14
+              {isRunning && (
+                <span
+                  className="pulse-dot"
+                  style={{ width: 8, height: 8, display: 'inline-block', verticalAlign: 'middle', marginRight: 8 }}
+                />
+              )}{' '}
+              {runName} &middot; {isDemo ? 'Run #14' : `Run ${runId?.slice(0, 8) ?? ''}`}
             </h1>
             <p className="r-page-sub">
-              Started 14:08 &middot; 24 min elapsed &middot; est. 38 min remaining &middot; 2&times;4 design &middot;
-              N=60 per cell &middot; seed 4719
+              Started {startedAt}
+              {isDemo && ' \u00b7 24 min elapsed \u00b7 est. 38 min remaining \u00b7 2\u00d74 design \u00b7 N=60 per cell \u00b7 seed 4719'}
+              {!isDemo && ` \u00b7 ${cells.length} cells \u00b7 ${totalAll} total dyads`}
+              {!isDemo && runStatus !== 'running' && ` \u00b7 status: ${runStatus}`}
             </p>
           </div>
-          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-            <button className="r-btn r-btn-secondary">
-              <Icon name="pause" size={13} /> Pause
-            </button>
-            <button className="r-btn r-btn-secondary">
-              <Icon name="stop" size={13} /> Abort
-            </button>
-            <button className="r-btn r-btn-ghost">
-              <Icon name="download" size={13} /> Snapshot CSV
-            </button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0, alignItems: 'flex-end' }}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                className="r-btn r-btn-secondary"
+                onClick={isDemo ? undefined : handlePause}
+                disabled={!isDemo && !isRunning}
+              >
+                <Icon name="pause" size={13} /> {runStatus === 'paused' ? 'Resume' : 'Pause'}
+              </button>
+              <button
+                className="r-btn r-btn-secondary"
+                onClick={isDemo ? undefined : handleAbort}
+                disabled={!isDemo && (runStatus === 'aborted' || runStatus === 'completed')}
+              >
+                <Icon name="stop" size={13} /> Abort
+              </button>
+              <button className="r-btn r-btn-ghost">
+                <Icon name="download" size={13} /> Snapshot CSV
+              </button>
+            </div>
+            {actionError && (
+              <span style={{ fontSize: 11, color: 'var(--accent-1)' }}>{actionError}</span>
+            )}
           </div>
         </div>
       </div>
@@ -239,7 +411,7 @@ export function RunDashboard() {
             tone="ok"
             ic="check"
           />
-          <StatTile label="In flight" value={inFlight} sub="across 3 cells" tone="info" />
+          <StatTile label="In flight" value={inFlight} sub={`across ${cells.filter((c) => c.status === 'running').length} cells`} tone="info" />
           <StatTile label="Queued" value={queued} sub={`${queuedCells} cells waiting`} tone="neutral" />
           <StatTile
             label="Failed"
@@ -248,7 +420,7 @@ export function RunDashboard() {
             tone={totalFail > 0 ? 'warn' : 'neutral'}
           />
           <StatTile label="Anomalies" value={totalAnom} sub={`${anomPct}% of completed`} tone="warn" ic="bell" />
-          <StatTile label="Token spend" value="2.41M" sub={'\u2248 \u20ac18.40 \u00b7 49% of budget'} tone="neutral" />
+          <StatTile label="Token spend" value={isDemo ? '2.41M' : '—'} sub={isDemo ? '\u2248 \u20ac18.40 \u00b7 49% of budget' : 'not tracked'} tone="neutral" />
         </div>
 
         {/* Overall progress bar */}
@@ -269,11 +441,13 @@ export function RunDashboard() {
               <span className="num" style={{ fontFamily: 'var(--font-num)', fontSize: 13, fontWeight: 600 }}>
                 {totalDone} / {totalAll}
               </span>
-              <span style={{ fontSize: 12, color: 'var(--text-3)' }}>&middot; est. complete 14:46</span>
+              {isDemo && (
+                <span style={{ fontSize: 12, color: 'var(--text-3)' }}>&middot; est. complete 14:46</span>
+              )}
             </div>
           </div>
           <div className="run-overall-bar">
-            {CELLS.map((c) => (
+            {cells.map((c) => (
               <div key={c.id} className="rob-segment" style={{ flex: c.total }}>
                 <div
                   className={`rob-fill rob-${c.status}`}
@@ -303,7 +477,7 @@ export function RunDashboard() {
                   Cells
                 </h2>
                 <span style={{ fontSize: 11.5, color: 'var(--text-3)' }}>
-                  Click a cell to inspect dyads &middot; 8 cells &middot; 2&times;4 design
+                  Click Inspect to view dyad transcripts &middot; {cells.length} cells
                 </span>
               </div>
               <div style={{ display: 'flex', gap: 6 }}>
@@ -326,8 +500,19 @@ export function RunDashboard() {
                 <div>Status</div>
                 <div></div>
               </div>
-              {CELLS.map((c) => (
-                <CellRow key={c.id} c={c} />
+              {cells.map((c) => (
+                <CellRow
+                  key={c.id}
+                  c={c}
+                  onInspect={
+                    onInspectDyad
+                      ? () => {
+                          const dyadId = isDemo ? 'd_0247' : cellFirstDyad(c.id);
+                          if (dyadId) onInspectDyad(dyadId);
+                        }
+                      : undefined
+                  }
+                />
               ))}
             </div>
           </div>
@@ -339,17 +524,21 @@ export function RunDashboard() {
               <div className="rsc-head">
                 <div>
                   <h3 className="rsc-h">Live event log</h3>
-                  <span className="rsc-sub">Last 30 seconds</span>
+                  <span className="rsc-sub">{isDemo ? 'Last 30 seconds' : 'Demo — connect a live runner to stream events'}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <span className="pulse-dot" />
-                  <span style={{ fontSize: 11, color: 'var(--text-3)' }}>Streaming</span>
+                  {isRunning && <span className="pulse-dot" />}
+                  <span style={{ fontSize: 11, color: 'var(--text-3)' }}>{isRunning ? 'Streaming' : 'Idle'}</span>
                 </div>
               </div>
               <div className="live-list">
-                {LIVE.map((e, i) => (
-                  <LiveEventRow key={i} e={e} />
-                ))}
+                {liveEvents.length > 0
+                  ? liveEvents.map((e, i) => <LiveEventRow key={i} e={e} />)
+                  : !isDemo && (
+                    <div style={{ padding: '12px 0', fontSize: 12, color: 'var(--text-4)', textAlign: 'center' }}>
+                      No events yet
+                    </div>
+                  )}
               </div>
               <div className="live-foot">
                 <a href="#">View full log &rarr;</a>
@@ -359,23 +548,29 @@ export function RunDashboard() {
             {/* Anomalies card */}
             <div className="run-side-card">
               <div className="rsc-head">
-                <h3 className="rsc-h">Anomalies (7)</h3>
+                <h3 className="rsc-h">Anomalies ({totalAnom})</h3>
                 <a href="#" style={{ fontSize: 11 }}>
                   Triage all &rarr;
                 </a>
               </div>
               <div className="anom-list">
-                {ANOMALIES.map((a) => (
-                  <div key={a.tag} className="anom-row">
-                    <div className="anom-row-head">
-                      <span className="r-chip r-chip-orange mono">{a.tag}</span>
-                      <span className="num" style={{ fontSize: 11.5, color: 'var(--text-3)' }}>
-                        {a.count}&times;
-                      </span>
+                {anomalies.length > 0
+                  ? anomalies.map((a) => (
+                    <div key={a.tag} className="anom-row">
+                      <div className="anom-row-head">
+                        <span className="r-chip r-chip-orange mono">{a.tag}</span>
+                        <span className="num" style={{ fontSize: 11.5, color: 'var(--text-3)' }}>
+                          {a.count}&times;
+                        </span>
+                      </div>
+                      <div className="anom-row-ex">{a.ex}</div>
                     </div>
-                    <div className="anom-row-ex">{a.ex}</div>
-                  </div>
-                ))}
+                  ))
+                  : !isDemo && (
+                    <div style={{ padding: '12px 0', fontSize: 12, color: 'var(--text-4)', textAlign: 'center' }}>
+                      No anomalies detected
+                    </div>
+                  )}
               </div>
             </div>
           </div>

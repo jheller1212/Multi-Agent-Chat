@@ -1,19 +1,22 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { clearVault } from '../../lib/apiKeyVault';
+import { cloneScenario, saveScenario } from '../../lib/scenario/loader';
 import { ResearchShell } from './ResearchShell';
 import { Library } from './Library';
 import { RunDashboard } from './RunDashboard';
 import { TranscriptViewer } from './TranscriptViewer';
 import { ScenarioBuilder } from './ScenarioBuilder';
+import { ExperimentLauncher } from './ExperimentLauncher';
 import { Icon } from './Icon';
 
-type ResearchScreen = 'library' | 'scenario' | 'experiment' | 'runs' | 'results' | 'transcript' | 'settings' | 'chat' | 'history';
+type ResearchScreen = 'library' | 'scenario' | 'experiment' | 'launch' | 'runs' | 'results' | 'transcript' | 'settings' | 'chat' | 'history';
 
 const BREADCRUMBS: Record<ResearchScreen, string[]> = {
   library: ['Research', 'Library'],
   scenario: ['Research', 'Scenarios', 'B2B Renegotiation — capability variant'],
   experiment: ['Research', 'Experiments'],
+  launch: ['Research', 'Experiments', 'Configure & Launch'],
   runs: ['Research', 'Experiments', 'Buyer Capability × Provider', 'Run #14'],
   results: ['Research', 'Results'],
   transcript: ['Research', 'Run #14', 'Cell A4', 'd_0247'],
@@ -26,6 +29,7 @@ const PAGE_MAP: Record<ResearchScreen, string> = {
   library: 'library',
   scenario: 'scenario',
   experiment: 'experiment',
+  launch: 'experiment',
   runs: 'runs',
   results: 'results',
   transcript: 'runs',
@@ -129,6 +133,9 @@ function PlaceholderScreen({ title, sub, icon }: { title: string; sub: string; i
 
 export function ResearchLayout({ onBack }: ResearchLayoutProps) {
   const [screen, setScreen] = useState<ResearchScreen>('library');
+  const [selectedScenarioId, setSelectedScenarioId] = useState<string | null>(null);
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [selectedDyadId, setSelectedDyadId] = useState<string | null>(null);
 
   const handleSignOut = async () => {
     clearVault();
@@ -142,6 +149,39 @@ export function ResearchLayout({ onBack }: ResearchLayoutProps) {
     }
   };
 
+  const handleEditScenario = useCallback((id: string) => {
+    setSelectedScenarioId(id);
+    setScreen('scenario');
+  }, []);
+
+  const handleCloneAndEdit = useCallback(async (id: string) => {
+    const cloned = await cloneScenario(id);
+    if (cloned) {
+      setSelectedScenarioId(cloned.id);
+      setScreen('scenario');
+    }
+  }, []);
+
+  const handleNewScenario = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const blank = await saveScenario({
+      name: 'Untitled Scenario',
+      description: '',
+      isPublic: false,
+      isTemplate: false,
+      domainAgents: [],
+      supervisors: [],
+      turnPolicy: { type: 'alternating', roundDefinition: [] },
+      terminationConditions: [{ type: 'turn_cap', maxTurns: 10 }],
+      outcomeSchema: { columns: [] },
+    });
+    if (blank) {
+      setSelectedScenarioId(blank.id);
+      setScreen('scenario');
+    }
+  }, []);
+
   return (
     <ResearchShell
       activePage={PAGE_MAP[screen]}
@@ -149,12 +189,44 @@ export function ResearchLayout({ onBack }: ResearchLayoutProps) {
       onNavClick={handleNavClick}
       onSignOut={handleSignOut}
     >
-      {screen === 'library' && <Library />}
-      {screen === 'scenario' && <ScenarioBuilder />}
-      {screen === 'experiment' && <PlaceholderScreen title="Experiments" sub="Design and configure factorial experiments." icon="flask" />}
-      {screen === 'runs' && <RunDashboard />}
+      {screen === 'library' && (
+        <Library
+          onEditScenario={handleEditScenario}
+          onCloneScenario={handleCloneAndEdit}
+          onNewScenario={handleNewScenario}
+          onViewRuns={() => setScreen('runs')}
+        />
+      )}
+      {screen === 'scenario' && <ScenarioBuilder scenarioId={selectedScenarioId ?? undefined} />}
+      {screen === 'experiment' && (
+        <ExperimentLauncher
+          scenarioId={selectedScenarioId ?? undefined}
+          scenarioName="Experiment"
+          onLaunch={(runId) => { setSelectedRunId(runId); setScreen('runs'); }}
+          onBack={() => setScreen('library')}
+        />
+      )}
+      {screen === 'launch' && (
+        <ExperimentLauncher
+          scenarioId={selectedScenarioId ?? undefined}
+          scenarioName="Experiment"
+          onLaunch={(runId) => { setSelectedRunId(runId); setScreen('runs'); }}
+          onBack={() => setScreen('scenario')}
+        />
+      )}
+      {screen === 'runs' && (
+        <RunDashboard
+          runId={selectedRunId ?? undefined}
+          onInspectDyad={(dyadId: string) => { setSelectedDyadId(dyadId); setScreen('transcript'); }}
+        />
+      )}
       {screen === 'results' && <PlaceholderScreen title="Results" sub="Browse completed experiment results and download CSVs." icon="chart" />}
-      {screen === 'transcript' && <TranscriptViewer />}
+      {screen === 'transcript' && (
+        <TranscriptViewer
+          dyadId={selectedDyadId ?? undefined}
+          onBack={() => setScreen('runs')}
+        />
+      )}
       {screen === 'settings' && <SettingsScreen onSignOut={handleSignOut} />}
       {screen === 'chat' && <PlaceholderScreen title="Quick Chat" sub="Two-agent conversations (legacy mode)." icon="chat" />}
       {screen === 'history' && <PlaceholderScreen title="History" sub="Browse past conversations." icon="clock" />}

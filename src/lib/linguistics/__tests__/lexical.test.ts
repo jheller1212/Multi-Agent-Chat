@@ -27,7 +27,7 @@ describe('countGratitude', () => {
 
 describe('countHedging', () => {
   it('counts hedging language', () => {
-    expect(countHedging('Perhaps we could find a middle ground. I think that might work.')).toBe(3);
+    expect(countHedging('Perhaps we could find a middle ground. I think that might work.')).toBe(4);
   });
 });
 

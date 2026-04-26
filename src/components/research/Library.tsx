@@ -205,13 +205,22 @@ const accentColor: Record<string, string> = {
 /*  Sub-components                                                     */
 /* ------------------------------------------------------------------ */
 
-function ScenarioCard({ s, onClone }: { s: MockScenario; onClone: (id: string) => void }) {
+function ScenarioCard({
+  s,
+  onClone,
+  onPreview,
+}: {
+  s: MockScenario;
+  onClone: (id: string) => void;
+  onPreview?: (id: string) => void;
+}) {
   const [hovered, setHovered] = useState(false);
 
   return (
     <div
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onClick={() => onPreview?.(s.id)}
       style={{
         background: 'var(--surface-panel)',
         border: `1px solid ${hovered ? 'var(--line-2)' : 'var(--line-1)'}`,
@@ -222,6 +231,7 @@ function ScenarioCard({ s, onClone }: { s: MockScenario; onClone: (id: string) =
         gap: 10,
         transition: 'border-color var(--dur-fast), box-shadow var(--dur-fast)',
         boxShadow: hovered ? 'var(--shadow-2)' : 'none',
+        cursor: onPreview ? 'pointer' : 'default',
       }}
     >
       {/* Head: icon + meta chips */}
@@ -303,10 +313,16 @@ function ScenarioCard({ s, onClone }: { s: MockScenario; onClone: (id: string) =
           justifyContent: 'flex-end',
         }}
       >
-        <button className="r-btn r-btn-ghost r-btn-sm">
+        <button
+          className="r-btn r-btn-ghost r-btn-sm"
+          onClick={(e) => { e.stopPropagation(); onPreview?.(s.id); }}
+        >
           <Icon name="eye" size={13} /> Preview
         </button>
-        <button className="r-btn r-btn-secondary r-btn-sm" onClick={() => onClone(s.id)}>
+        <button
+          className="r-btn r-btn-secondary r-btn-sm"
+          onClick={(e) => { e.stopPropagation(); onClone(s.id); }}
+        >
           <Icon name="copy" size={13} /> Clone
         </button>
       </div>
@@ -314,9 +330,18 @@ function ScenarioCard({ s, onClone }: { s: MockScenario; onClone: (id: string) =
   );
 }
 
-function YourCard({ y }: { y: MockYourScenario }) {
+function YourCard({
+  y,
+  onEdit,
+  onRun,
+}: {
+  y: MockYourScenario;
+  onEdit?: (id: string) => void;
+  onRun?: () => void;
+}) {
   return (
     <div
+      onClick={() => onEdit?.(y.id)}
       style={{
         background: 'var(--surface-panel)',
         border: '1px solid var(--line-1)',
@@ -325,6 +350,7 @@ function YourCard({ y }: { y: MockYourScenario }) {
         display: 'flex',
         flexDirection: 'column',
         gap: 4,
+        cursor: onEdit ? 'pointer' : 'default',
       }}
     >
       {/* Title row */}
@@ -355,10 +381,16 @@ function YourCard({ y }: { y: MockYourScenario }) {
 
       {/* Actions */}
       <div style={{ display: 'flex', gap: 4, marginTop: 2, marginLeft: -8 }}>
-        <button className="r-btn r-btn-ghost r-btn-sm">
+        <button
+          className="r-btn r-btn-ghost r-btn-sm"
+          onClick={(e) => { e.stopPropagation(); onEdit?.(y.id); }}
+        >
           <Icon name="edit" size={12} /> Edit
         </button>
-        <button className="r-btn r-btn-ghost r-btn-sm">
+        <button
+          className="r-btn r-btn-ghost r-btn-sm"
+          onClick={(e) => { e.stopPropagation(); onRun?.(); }}
+        >
           <Icon name="play" size={12} /> Run
         </button>
       </div>
@@ -370,7 +402,14 @@ function YourCard({ y }: { y: MockYourScenario }) {
 /*  Main Library component                                             */
 /* ------------------------------------------------------------------ */
 
-export function Library() {
+interface LibraryProps {
+  onEditScenario?: (id: string) => void;
+  onCloneScenario?: (id: string) => void;
+  onNewScenario?: () => void;
+  onViewRuns?: () => void;
+}
+
+export function Library({ onEditScenario, onCloneScenario, onNewScenario, onViewRuns }: LibraryProps) {
   const [filter, setFilter] = useState<string>('All domains');
   const [loading, setLoading] = useState(true);
   const [templateCards, setTemplateCards] = useState<MockScenario[]>(MOCK_SCENARIOS);
@@ -432,12 +471,16 @@ export function Library() {
 
   const handleClone = useCallback(async (scenarioId: string) => {
     if (!isAuthenticated) return;
-    const cloned = await cloneScenario(scenarioId);
-    if (cloned) {
-      // Re-fetch to update the list
-      await fetchScenarios();
+    if (onCloneScenario) {
+      // Parent handles cloning + navigation
+      onCloneScenario(scenarioId);
+    } else {
+      const cloned = await cloneScenario(scenarioId);
+      if (cloned) {
+        await fetchScenarios();
+      }
     }
-  }, [isAuthenticated, fetchScenarios]);
+  }, [isAuthenticated, onCloneScenario, fetchScenarios]);
 
   const visible = filter === 'All domains' ? templateCards : templateCards.filter((s) => s.domain === filter);
   const featured = visible.filter((s) => s.featured);
@@ -458,7 +501,7 @@ export function Library() {
             <button className="r-btn r-btn-secondary">
               <Icon name="book" size={14} /> Browse paper-replications
             </button>
-            <button className="r-btn r-btn-primary">
+            <button className="r-btn r-btn-primary" onClick={onNewScenario}>
               <Icon name="plus" size={14} /> Blank scenario
             </button>
           </div>
@@ -569,7 +612,7 @@ export function Library() {
               }}
             >
               {yourCards.map((y) => (
-                <YourCard key={y.id} y={y} />
+                <YourCard key={y.id} y={y} onEdit={onEditScenario} onRun={onViewRuns} />
               ))}
             </div>
 
