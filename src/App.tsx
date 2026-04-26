@@ -44,7 +44,7 @@ type View = 'landing' | 'auth' | 'app' | 'research' | 'privacy' | 'terms';
 function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<View>('landing');
+  const [view, setView] = useState<View>('research');
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signup');
   const [workshopData, setWorkshopData] = useState<WorkshopData | null>(null);
   const [workshopPublicInfo, setWorkshopPublicInfo] = useState<WorkshopPublicInfo | null>(null);
@@ -246,10 +246,10 @@ function App() {
     return <Suspense fallback={suspenseFallback}>{storageNotice}<Auth onAuthSuccess={() => setView('research')} initialIsSignUp={authMode === 'signup'} workshopInfo={workshopPublicInfo} /></Suspense>;
   }
 
-  if (view === 'research' && session) {
+  if (view === 'research') {
     return (
       <Suspense fallback={suspenseFallback}>
-        <ResearchLayout onBack={() => setView('app')} />
+        <ResearchLayout onBack={() => setView(session ? 'app' : 'landing')} />
       </Suspense>
     );
   }
@@ -281,8 +281,8 @@ function App() {
     return <Suspense fallback={suspenseFallback}>{storageNotice}<TermsOfUse onBack={() => setView('landing')} /></Suspense>;
   }
 
-  const goToSignIn = () => { setAuthMode('signin'); setView(session ? 'app' : 'auth'); };
-  const goToSignUp = () => { setAuthMode('signup'); setView(session ? 'app' : 'auth'); };
+  const goToSignIn = () => { setAuthMode('signin'); setView(session ? 'research' : 'auth'); };
+  const goToSignUp = () => { setAuthMode('signup'); setView(session ? 'research' : 'auth'); };
 
   return (
     <Suspense fallback={suspenseFallback}>
