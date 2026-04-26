@@ -1,0 +1,49 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  body {
+    @apply bg-lab-bg text-lab-body;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  }
+}
+
+@layer components {
+  /* Glassmorphism surface */
+  .glass {
+    @apply bg-white/70 backdrop-blur-lg border-b border-lab-border;
+  }
+
+  .dark .glass {
+    @apply bg-gray-900/70 border-gray-700;
+  }
+
+  /* Floating lab panel */
+  .lab-panel {
+    @apply bg-white border border-lab-border rounded-lab-card shadow-lab-soft;
+  }
+
+  .dark .lab-panel {
+    @apply bg-gray-800 border-gray-700;
+  }
+
+  /* Shimmer loading state for AI messages */
+  .shimmer {
+    background: linear-gradient(90deg, transparent 0%, rgba(59,130,246,0.06) 50%, transparent 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.8s ease-in-out infinite;
+  }
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
