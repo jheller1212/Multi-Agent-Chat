@@ -63,7 +63,7 @@ export const LEGAL_ADVOCACY_SCENARIO: Omit<Scenario, 'id' | 'userId' | 'createdA
   turnPolicy: { type: 'structured_sequence', roundDefinition: ['plaintiff', 'defense', 'judge'] },
   terminationConditions: [
     { type: 'supervisor_classification', supervisorName: 'verdict_classifier', terminalValues: ['PLAINTIFF', 'DEFENSE'] },
-    { type: 'turn_cap', maxTurns: 18 },
+    { type: 'turn_cap', maxTurns: 20 },
   ],
   outcomeSchema: {
     columns: [
@@ -97,7 +97,7 @@ export const MEDIATION_SCENARIO: Omit<Scenario, 'id' | 'userId' | 'createdAt' | 
   turnPolicy: { type: 'mediator_led', roundDefinition: ['mediator', 'party_a', 'party_b'], config: { mediatorName: 'mediator' } },
   terminationConditions: [
     { type: 'supervisor_classification', supervisorName: 'agreement_checker', terminalValues: ['AGREEMENT', 'IMPASSE'] },
-    { type: 'turn_cap', maxTurns: 24 },
+    { type: 'turn_cap', maxTurns: 20 },
   ],
   outcomeSchema: {
     columns: [
