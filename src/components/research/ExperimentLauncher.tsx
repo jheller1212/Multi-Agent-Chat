@@ -1,8 +1,8 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Icon } from './Icon';
 import { supabase } from '../../lib/supabase';
 import { ExperimentRunner } from '../../lib/experiment/runner';
-import { loadVault } from '../../lib/apiKeyVault';
+import { loadVault, saveVault, type ProviderVault } from '../../lib/apiKeyVault';
 import { loadScenario } from '../../lib/scenario/loader';
 import type { ExperimentDefinition } from '../../types/experiment';
 import type { ProviderType } from '../../types';
@@ -55,6 +55,22 @@ export function ExperimentLauncher({ scenarioId, scenarioName, onLaunch, onBack 
   const [launchError, setLaunchError] = useState<string | null>(null);
   const runnerRef = useRef<ExperimentRunner | null>(null);
 
+  // API key management
+  const [vault, setVault] = useState<ProviderVault>(() => loadVault());
+  const [showKeyInput, setShowKeyInput] = useState(false);
+  const [keyInput, setKeyInput] = useState('');
+  const hasOpenAIKey = vault.gpt4.length > 0;
+  const hasAnyKey = Object.values(vault).some(k => k.length > 0);
+
+  useEffect(() => { setVault(loadVault()); }, []);
+
+  const handleSaveKey = () => {
+    const updated = { ...vault, gpt4: keyInput };
+    setVault(updated);
+    saveVault(updated);
+    setShowKeyInput(false);
+  };
+
   const cellCount = factors.reduce((acc, f) => acc * f.levels.length, 1);
   const totalDyads = cellCount * nPerCell;
 
@@ -95,9 +111,15 @@ export function ExperimentLauncher({ scenarioId, scenarioName, onLaunch, onBack 
         return;
       }
 
-      // Load API keys from vault
-      const vault = loadVault();
-      const apiKeys = vaultToApiKeys(vault);
+      // Load API keys from vault and check at least one exists
+      const currentVault = loadVault();
+      const apiKeys = vaultToApiKeys(currentVault);
+      if (!Object.values(apiKeys).some(k => k.length > 0)) {
+        setLaunchError('No API keys configured. Enter at least one provider key below to run experiments.');
+        setShowKeyInput(true);
+        setLaunching(false);
+        return;
+      }
 
       // Create the logical experiment record so we have an ID to bind the run to
       const { data: experiment, error: expError } = await supabase
@@ -353,36 +375,131 @@ export function ExperimentLauncher({ scenarioId, scenarioName, onLaunch, onBack 
           </div>
         </div>
 
-        {/* Summary */}
-        <div className="r-card" style={{
-          background: 'var(--surface-sunken)', borderStyle: 'dashed',
-        }}>
-          <h3 style={{ fontFamily: 'var(--font-h)', fontSize: 14, fontWeight: 700, marginBottom: 8 }}>
-            Launch Summary
-          </h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, fontSize: 12 }}>
-            <div>
-              <div style={{ color: 'var(--text-4)', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Cells</div>
-              <div className="num" style={{ fontSize: 18, fontWeight: 700 }}>{cellCount}</div>
-            </div>
-            <div>
-              <div style={{ color: 'var(--text-4)', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Dyads</div>
-              <div className="num" style={{ fontSize: 18, fontWeight: 700 }}>{totalDyads}</div>
-            </div>
-            <div>
-              <div style={{ color: 'var(--text-4)', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Est. API calls</div>
-              <div className="num" style={{ fontSize: 18, fontWeight: 700 }}>~{totalDyads * (devMode ? 10 : 15)}</div>
-            </div>
-            <div>
-              <div style={{ color: 'var(--text-4)', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Mode</div>
-              <div style={{ fontSize: 14, fontWeight: 600 }}>
-                <span className={devMode ? 'r-chip-blue r-chip' : 'r-chip-orange r-chip'}>
-                  {devMode ? 'Dev' : 'Production'}
+        {/* Pre-Launch Checklist */}
+        {(() => {
+          const hasFactors = factors.length > 0 && factors.every(f => f.levels.length >= 2);
+          const hasName = name.trim().length > 0;
+          const hasScenario = !!scenarioId;
+          const nReasonable = nPerCell >= 1 && nPerCell <= 500;
+          const concurrencyOk = concurrency >= 1 && concurrency <= 20;
+
+          const checks: Array<{ label: string; ok: boolean; detail: string; action?: () => void; actionLabel?: string }> = [
+            { label: 'Experiment name', ok: hasName, detail: hasName ? name : 'Enter a name above' },
+            { label: 'Scenario selected', ok: hasScenario, detail: hasScenario ? `ID: ${scenarioId?.slice(0, 8)}...` : 'Go back and select a scenario first' },
+            { label: 'API key configured', ok: hasAnyKey, detail: hasAnyKey ? `OpenAI key (${vault.gpt4.slice(0, 7)}...)` : 'No provider keys found', action: () => setShowKeyInput(true), actionLabel: 'Add key' },
+            { label: 'Factors defined', ok: hasFactors, detail: hasFactors ? `${factors.length} factor(s), ${cellCount} cells` : 'Each factor needs at least 2 levels' },
+            { label: 'N per cell', ok: nReasonable, detail: nReasonable ? `${nPerCell} dyads × ${cellCount} cells = ${totalDyads} total` : 'Must be between 1 and 500' },
+            { label: 'Concurrency', ok: concurrencyOk, detail: concurrencyOk ? `${concurrency} parallel dyads` : 'Must be between 1 and 20' },
+            { label: 'Mode', ok: true, detail: devMode ? 'Dev mode — supervisors skipped (fast + cheap)' : 'Production — full supervisor pipeline' },
+          ];
+
+          const allOk = checks.every(c => c.ok);
+
+          return (
+            <div className="r-card" style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <h3 style={{ fontFamily: 'var(--font-h)', fontSize: 15, fontWeight: 700, margin: 0 }}>
+                  Pre-Launch Checklist
+                </h3>
+                <span className={allOk ? 'r-chip r-chip-green' : 'r-chip r-chip-orange'}>
+                  {allOk ? 'All checks passed' : `${checks.filter(c => !c.ok).length} issue(s)`}
                 </span>
               </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                {checks.map((c, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '10px 0',
+                      borderBottom: i < checks.length - 1 ? '1px solid var(--line-1)' : 'none',
+                    }}
+                  >
+                    <div style={{
+                      width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
+                      display: 'grid', placeItems: 'center',
+                      background: c.ok ? 'rgba(46,163,107,0.12)' : 'var(--accent-1-soft)',
+                      color: c.ok ? 'var(--success)' : 'var(--accent-1)',
+                    }}>
+                      <Icon name={c.ok ? 'check' : 'x'} size={12} stroke={2.5} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)' }}>{c.label}</div>
+                      <div style={{ fontSize: 11.5, color: c.ok ? 'var(--text-3)' : 'var(--accent-1)', marginTop: 1 }}>{c.detail}</div>
+                    </div>
+                    {!c.ok && c.action && (
+                      <button className="r-btn r-btn-secondary r-btn-sm" onClick={c.action}>
+                        {c.actionLabel ?? 'Fix'}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Inline API key input */}
+              {showKeyInput && (
+                <div style={{
+                  marginTop: 12, padding: 12, borderRadius: 6,
+                  background: 'var(--surface-sunken)', border: '1px solid var(--line-1)',
+                }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 6 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10A37F' }} />
+                    OpenAI API Key
+                  </label>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <input
+                      type="password"
+                      placeholder="sk-..."
+                      value={keyInput}
+                      onChange={e => setKeyInput(e.target.value)}
+                      autoFocus
+                      style={{
+                        flex: 1, padding: '8px 12px', borderRadius: 6,
+                        border: '1px solid var(--line-2)', background: 'var(--surface-panel)',
+                        color: 'var(--text-1)', fontSize: 12.5, fontFamily: 'var(--font-mono)',
+                      }}
+                    />
+                    <button className="r-btn r-btn-primary r-btn-sm" onClick={handleSaveKey} disabled={!keyInput}>
+                      Save
+                    </button>
+                  </div>
+                  <p style={{ fontSize: 11, color: 'var(--text-4)', margin: '6px 0 0' }}>
+                    Stored encrypted in your browser. Go to Settings for more providers.
+                  </p>
+                </div>
+              )}
+
+              {/* Summary stats */}
+              <div style={{
+                marginTop: 14, padding: '12px 0 0',
+                borderTop: '1px dashed var(--line-1)',
+                display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, fontSize: 12,
+              }}>
+                <div>
+                  <div style={{ color: 'var(--text-4)', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Cells</div>
+                  <div className="num" style={{ fontSize: 18, fontWeight: 700 }}>{cellCount}</div>
+                </div>
+                <div>
+                  <div style={{ color: 'var(--text-4)', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Dyads</div>
+                  <div className="num" style={{ fontSize: 18, fontWeight: 700 }}>{totalDyads}</div>
+                </div>
+                <div>
+                  <div style={{ color: 'var(--text-4)', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Est. API calls</div>
+                  <div className="num" style={{ fontSize: 18, fontWeight: 700 }}>~{totalDyads * (devMode ? 10 : 15)}</div>
+                </div>
+                <div>
+                  <div style={{ color: 'var(--text-4)', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Mode</div>
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>
+                    <span className={devMode ? 'r-chip r-chip-blue' : 'r-chip r-chip-orange'}>
+                      {devMode ? 'Dev' : 'Production'}
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+          );
+        })()}
       </div>
     </div>
   );
