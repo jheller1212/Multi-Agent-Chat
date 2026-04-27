@@ -2,7 +2,7 @@
 
 [![Build](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/jheller1212/Multi-Agent-Chat)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![Netlify](https://img.shields.io/badge/deployed-Netlify-00C7B7)](https://ai2aichat.com)
+[![Netlify](https://img.shields.io/badge/deployed-Netlify-00C7B7)](https://multi-agent-chat-research.netlify.app)
 
 A browser-first platform for designing and running multi-agent LLM experiments. Built by [DEXLab](https://dexlab.maastrichtuniversity.nl) at Maastricht University.
 
