@@ -11,7 +11,7 @@ import { ScenarioBuilder } from './ScenarioBuilder';
 import { ExperimentLauncher } from './ExperimentLauncher';
 import { Icon } from './Icon';
 
-type ResearchScreen = 'library' | 'scenario' | 'experiment' | 'launch' | 'runs' | 'results' | 'transcript' | 'settings' | 'chat' | 'history';
+type ResearchScreen = 'library' | 'scenario' | 'experiment' | 'launch' | 'runs' | 'results' | 'transcript' | 'settings';
 
 const BREADCRUMBS: Record<ResearchScreen, string[]> = {
   library: ['Research', 'Library'],
@@ -22,8 +22,6 @@ const BREADCRUMBS: Record<ResearchScreen, string[]> = {
   results: ['Research', 'Results'],
   transcript: ['Research', 'Run #14', 'Cell A4', 'd_0247'],
   settings: ['Account', 'Settings'],
-  chat: ['Workspace', 'Quick Chat'],
-  history: ['Workspace', 'History'],
 };
 
 const PAGE_MAP: Record<ResearchScreen, string> = {
@@ -35,8 +33,6 @@ const PAGE_MAP: Record<ResearchScreen, string> = {
   results: 'results',
   transcript: 'runs',
   settings: 'settings',
-  chat: 'chat',
-  history: 'history',
 };
 
 interface ResearchLayoutProps {
@@ -515,8 +511,6 @@ export function ResearchLayout({ onBack }: ResearchLayoutProps) {
         />
       )}
       {screen === 'settings' && <SettingsScreen onSignOut={handleSignOut} />}
-      {screen === 'chat' && <QuickChatScreen onBack={onBack} />}
-      {screen === 'history' && <HistoryScreen />}
     </ResearchShell>
   );
 }

@@ -239,16 +239,6 @@ function Sidebar({ activePage, onNavClick }: { activePage: string; onNavClick?: 
         color: 'var(--text-4)', fontWeight: 600, padding: '14px 12px 6px',
         fontFamily: 'var(--font-ui)',
       }}>
-        Workspace
-      </div>
-      <NavItem id="chat" label="Quick Chat" icon="chat" active={activePage === 'chat'} onClick={() => onNavClick?.('chat')} />
-      <NavItem id="history" label="History" icon="clock" active={activePage === 'history'} onClick={() => onNavClick?.('history')} />
-
-      <div style={{
-        fontSize: 10.5, textTransform: 'uppercase' as const, letterSpacing: '0.08em',
-        color: 'var(--text-4)', fontWeight: 600, padding: '14px 12px 6px',
-        fontFamily: 'var(--font-ui)',
-      }}>
         Research
       </div>
       <NavItem id="library" label="Library" icon="library" active={activePage === 'library'} onClick={() => onNavClick?.('library')} />
