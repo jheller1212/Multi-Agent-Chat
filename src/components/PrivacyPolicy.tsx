@@ -26,11 +26,11 @@ export function PrivacyPolicy({ onBack }: PrivacyPolicyProps) {
           <section className="space-y-2">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">1. Who We Are</h2>
             <p>
-              AI2AI-Chat ("we", "our", or "the Service") is an independent research tool that lets you
+              Multi-Agent-Chat ("we", "our", or "the Service") is an independent research tool that lets you
               run structured conversations between two AI models using your own API keys. The Service is
               operated as a personal/independent project. For privacy-related questions, contact us at{' '}
-              <a href="mailto:hello@ai2ai-chat.com" className="text-indigo-600 dark:text-indigo-400 underline">
-                hello@ai2ai-chat.com
+              <a href="mailto:jonasheller89@gmail.com" className="text-indigo-600 dark:text-indigo-400 underline">
+                jonasheller89@gmail.com
               </a>.
             </p>
           </section>
@@ -133,8 +133,8 @@ export function PrivacyPolicy({ onBack }: PrivacyPolicyProps) {
             </ul>
             <p className="mt-2">
               To exercise any right, email{' '}
-              <a href="mailto:hello@ai2ai-chat.com" className="text-indigo-600 dark:text-indigo-400 underline">
-                hello@ai2ai-chat.com
+              <a href="mailto:jonasheller89@gmail.com" className="text-indigo-600 dark:text-indigo-400 underline">
+                jonasheller89@gmail.com
               </a>. We will respond within 30 days. You also have the right to lodge a complaint with
               your local data protection authority.
             </p>
@@ -173,8 +173,8 @@ export function PrivacyPolicy({ onBack }: PrivacyPolicyProps) {
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">11. Contact</h2>
             <p>
               For any privacy questions or to exercise your rights, contact:{' '}
-              <a href="mailto:hello@ai2ai-chat.com" className="text-indigo-600 dark:text-indigo-400 underline">
-                hello@ai2ai-chat.com
+              <a href="mailto:jonasheller89@gmail.com" className="text-indigo-600 dark:text-indigo-400 underline">
+                jonasheller89@gmail.com
               </a>
             </p>
           </section>

@@ -24,7 +24,7 @@ export function TermsOfUse({ onBack }: TermsOfUseProps) {
           </div>
 
           <p>
-            By creating an account and using AI2AI Chat ("the Service"), you agree to the following
+            By creating an account and using Multi-Agent-Chat ("the Service"), you agree to the following
             terms. If you do not agree, do not use the Service.
           </p>
 
@@ -103,7 +103,7 @@ export function TermsOfUse({ onBack }: TermsOfUseProps) {
             <p>
               By creating an account, you agree to receive service-related emails including account
               confirmations, password resets, and important service notices. You may opt out of
-              non-essential communications at any time by contacting us at hello@ai2ai-chat.com.
+              non-essential communications at any time by contacting us at jonasheller89@gmail.com.
             </p>
           </section>
 
@@ -147,8 +147,8 @@ export function TermsOfUse({ onBack }: TermsOfUseProps) {
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">11. Contact</h2>
             <p>
               For questions about these Terms, contact:{' '}
-              <a href="mailto:hello@ai2ai-chat.com" className="text-indigo-600 dark:text-indigo-400 underline">
-                hello@ai2ai-chat.com
+              <a href="mailto:jonasheller89@gmail.com" className="text-indigo-600 dark:text-indigo-400 underline">
+                jonasheller89@gmail.com
               </a>
             </p>
           </section>

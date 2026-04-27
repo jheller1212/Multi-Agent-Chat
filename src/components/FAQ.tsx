@@ -3,7 +3,7 @@ import { ChevronDown } from 'lucide-react';
 
 const faqs = [
   {
-    q: "What is AI2AI-Chat?",
+    q: "What is Multi-Agent-Chat?",
     a: "A free tool that puts two AI models in conversation with each other. You configure each model independently — provider, version, system prompt, temperature — then watch them converse and export the results. No coding required.",
   },
   {

@@ -147,7 +147,7 @@ export function WorkshopAdmin({ onClose }: WorkshopAdminProps) {
   };
 
   const copyLink = (code: string) => {
-    navigator.clipboard.writeText(`https://ai2aichat.com/?workshop=${code}`);
+    navigator.clipboard.writeText(`https://multi-agent-chat-research.netlify.app/?workshop=${code}`);
     setCopiedCode(code);
     setTimeout(() => setCopiedCode(null), 2000);
   };
@@ -362,7 +362,7 @@ export function WorkshopAdmin({ onClose }: WorkshopAdminProps) {
                     </div>
                   )}
                   {copiedCode === w.code && (
-                    <p className="text-xs text-green-600 dark:text-green-400 mt-2">Link copied: ai2aichat.com/?workshop={w.code}</p>
+                    <p className="text-xs text-green-600 dark:text-green-400 mt-2">Link copied: multi-agent-chat-research.netlify.app/?workshop={w.code}</p>
                   )}
                 </div>
               ))}

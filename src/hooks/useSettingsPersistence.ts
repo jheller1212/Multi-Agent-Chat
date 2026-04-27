@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { sc, scNum, scBool } from '../lib/configHelpers';
 
-const STORAGE_KEY = 'ai2ai_settings';
+const STORAGE_KEY = 'mac_settings';
 
 export function loadSettings(): Record<string, unknown> | null {
   try {

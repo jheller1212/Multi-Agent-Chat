@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { ArrowLeft, ArrowRight, CheckCircle } from 'lucide-react';
 
-const TOUR_COUNT_KEY = 'ai2ai_tour_count';
-const TOUR_DISMISSED_KEY = 'ai2ai_tour_dismissed';
+const TOUR_COUNT_KEY = 'mac_tour_count';
+const TOUR_DISMISSED_KEY = 'mac_tour_dismissed';
 const MAX_AUTO_SHOWS = 5;
 const SPOTLIGHT_PADDING = 10;
 const TOOLTIP_WIDTH = 310;
@@ -10,9 +10,9 @@ const TOOLTIP_WIDTH = 310;
 /** Returns true if the tour should auto-open (migrates the old done key). */
 export function shouldAutoShowTour(): boolean {
   // Migrate old one-shot key
-  if (localStorage.getItem('ai2ai_tour_done')) {
+  if (localStorage.getItem('mac_tour_done')) {
     localStorage.setItem(TOUR_DISMISSED_KEY, '1');
-    localStorage.removeItem('ai2ai_tour_done');
+    localStorage.removeItem('mac_tour_done');
   }
   if (localStorage.getItem(TOUR_DISMISSED_KEY)) return false;
   const count = parseInt(localStorage.getItem(TOUR_COUNT_KEY) || '0', 10);
@@ -41,7 +41,7 @@ interface TourStep {
 const STEPS: TourStep[] = [
   {
     target: null,
-    title: 'Welcome to AI2AI Chat',
+    title: 'Welcome to Multi-Agent-Chat',
     description: "You're about to run conversations between two AI models. This quick tour walks you through the setup — takes less than a minute.",
   },
   {

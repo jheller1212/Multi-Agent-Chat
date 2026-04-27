@@ -375,7 +375,7 @@ export function ResearchLayout({ onBack }: ResearchLayoutProps) {
           onInspectDyad={(dyadId: string) => { setSelectedDyadId(dyadId); setScreen('transcript'); }}
         />
       )}
-      {screen === 'results' && <PlaceholderScreen title="Results" sub="Browse completed experiment results and download CSVs." icon="chart" />}
+      {screen === 'results' && <ResultsScreen />}
       {screen === 'transcript' && (
         <TranscriptViewer
           dyadId={selectedDyadId ?? undefined}
@@ -383,8 +383,8 @@ export function ResearchLayout({ onBack }: ResearchLayoutProps) {
         />
       )}
       {screen === 'settings' && <SettingsScreen onSignOut={handleSignOut} />}
-      {screen === 'chat' && <PlaceholderScreen title="Quick Chat" sub="Two-agent conversations (legacy mode)." icon="chat" />}
-      {screen === 'history' && <PlaceholderScreen title="History" sub="Browse past conversations." icon="clock" />}
+      {screen === 'chat' && <QuickChatScreen onBack={onBack} />}
+      {screen === 'history' && <HistoryScreen />}
     </ResearchShell>
   );
 }

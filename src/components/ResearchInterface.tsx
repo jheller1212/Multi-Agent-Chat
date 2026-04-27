@@ -202,7 +202,7 @@ export function ResearchInterface({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `ai2ai-conversation-${Date.now()}.txt`;
+    a.download = `mac-conversation-${Date.now()}.txt`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -271,7 +271,7 @@ export function ResearchInterface({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `ai2ai-conversation-${Date.now()}.csv`;
+    a.download = `mac-conversation-${Date.now()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -306,7 +306,7 @@ export function ResearchInterface({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `ai2ai-config-${Date.now()}.json`;
+    a.download = `mac-config-${Date.now()}.json`;
     a.click();
     URL.revokeObjectURL(url);
   }, [configPayload]);

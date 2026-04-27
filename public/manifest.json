@@ -1,6 +1,6 @@
 {
-  "name": "AI2AI Chat",
-  "short_name": "AI2AI",
+  "name": "Multi-Agent-Chat",
+  "short_name": "MAC",
   "description": "Watch two AI models converse in real time",
   "start_url": "/",
   "display": "standalone",

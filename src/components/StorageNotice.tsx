@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 
-const NOTICE_KEY = 'ai2ai_storage_notice_dismissed';
+const NOTICE_KEY = 'mac_storage_notice_dismissed';
 
 interface StorageNoticeProps {
   onPrivacyClick: () => void;

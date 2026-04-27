@@ -50,7 +50,7 @@ function App() {
   const [workshopPublicInfo, setWorkshopPublicInfo] = useState<WorkshopPublicInfo | null>(null);
   const [workshopInactive, setWorkshopInactive] = useState<string | null>(null);
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
-    const stored = localStorage.getItem('ai2ai_theme');
+    const stored = localStorage.getItem('mac_theme');
     if (stored) return stored === 'dark';
     return window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
@@ -61,7 +61,7 @@ function App() {
     } else {
       document.documentElement.classList.remove('dark');
     }
-    localStorage.setItem('ai2ai_theme', isDarkMode ? 'dark' : 'light');
+    localStorage.setItem('mac_theme', isDarkMode ? 'dark' : 'light');
   }, [isDarkMode]);
 
   // Load encrypted API keys from server, or migrate existing localStorage keys
@@ -190,10 +190,10 @@ function App() {
 
   const handleSignOut = async () => {
     try {
-      const raw = localStorage.getItem('ai2ai_settings');
+      const raw = localStorage.getItem('mac_settings');
       if (raw) {
         const s = JSON.parse(raw);
-        localStorage.setItem('ai2ai_settings', JSON.stringify({ ...s, apiKey1: '', apiKey2: '' }));
+        localStorage.setItem('mac_settings', JSON.stringify({ ...s, apiKey1: '', apiKey2: '' }));
       }
     } catch { /* ignore */ }
     clearVault();
@@ -233,7 +233,7 @@ function App() {
               onClick={() => { window.location.href = window.location.origin; }}
               className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-orange-500 to-sky-500 rounded-lg hover:from-orange-400 hover:to-sky-400 transition-all"
             >
-              Go to AI2AI Chat
+              Go to Multi-Agent-Chat
             </button>
           </div>
         </div>

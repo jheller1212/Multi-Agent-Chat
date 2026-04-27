@@ -5,7 +5,7 @@ import react from '@vitejs/plugin-react';
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  base: process.env.GITHUB_ACTIONS ? '/AI2AI-Chat/' : '/',
+  base: process.env.GITHUB_ACTIONS ? '/Multi-Agent-Chat/' : '/',
   optimizeDeps: {
     exclude: ['lucide-react'],
   },

@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 
-const VAULT_KEY = 'ai2ai_api_keys';
+const VAULT_KEY = 'mac_api_keys';
 
 export type ProviderVault = {
   gpt4: string;

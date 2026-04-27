@@ -164,7 +164,7 @@ export function ChatPanel({
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `ai2ai-conversation-${Date.now()}.png`;
+        a.download = `mac-conversation-${Date.now()}.png`;
         a.click();
         URL.revokeObjectURL(url);
       });
