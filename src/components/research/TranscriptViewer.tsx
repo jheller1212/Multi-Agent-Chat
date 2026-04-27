@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
+import { exportDyadJSON, downloadCSV } from '../../lib/outcomes/csv-export';
 import { Icon } from './Icon';
 
 /* ── Static mock data ── */
@@ -428,6 +429,12 @@ export function TranscriptViewer({ dyadId, onNavigateDyad, onBack }: TranscriptV
   const [supervisorOutputs, setSupervisorOutputs] = useState<SupervisorOutputRow[]>([]);
   const [loading, setLoading] = useState(false);
 
+  const handleExportJSON = useCallback(async () => {
+    if (!dyadId) return;
+    const json = await exportDyadJSON(dyadId);
+    downloadCSV(json, `dyad-${dyadId.slice(0, 8)}.json`);
+  }, [dyadId]);
+
   const fetchDyad = useCallback(async () => {
     if (!dyadId) return;
     setLoading(true);
@@ -582,7 +589,12 @@ export function TranscriptViewer({ dyadId, onNavigateDyad, onBack }: TranscriptV
             >
               Next dyad <Icon name="arrowRight" size={13} />
             </button>
-            <button className="r-btn r-btn-secondary r-btn-sm">
+            <button
+              className="r-btn r-btn-secondary r-btn-sm"
+              onClick={isDemo ? undefined : handleExportJSON}
+              title={isDemo ? 'Export not available in demo mode' : undefined}
+              style={isDemo ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
+            >
               <Icon name="download" size={13} /> Export JSON
             </button>
           </div>
@@ -946,14 +958,28 @@ export function TranscriptViewer({ dyadId, onNavigateDyad, onBack }: TranscriptV
                 : '// No extraction data'}
             </pre>
           </div>
-          <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-            <button className="r-btn r-btn-secondary r-btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
-              <Icon name="copy" size={12} /> Copy
-            </button>
-            <button className="r-btn r-btn-ghost r-btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
-              View raw
-            </button>
-          </div>
+          {(() => {
+            const jsonContent = isDemo
+              ? MOCK_OUTCOME_JSON
+              : extractorOutput
+              ? JSON.stringify(extractorOutput.parsed, null, 2)
+              : '// No extraction data';
+            const copyJSON = () => { void navigator.clipboard.writeText(jsonContent); };
+            const viewRaw = () => {
+              const blob = new Blob([jsonContent], { type: 'application/json' });
+              window.open(URL.createObjectURL(blob), '_blank');
+            };
+            return (
+              <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                <button className="r-btn r-btn-secondary r-btn-sm" style={{ flex: 1, justifyContent: 'center' }} onClick={copyJSON}>
+                  <Icon name="copy" size={12} /> Copy
+                </button>
+                <button className="r-btn r-btn-ghost r-btn-sm" style={{ flex: 1, justifyContent: 'center' }} onClick={viewRaw}>
+                  View raw
+                </button>
+              </div>
+            );
+          })()}
         </div>
       </div>
     </div>

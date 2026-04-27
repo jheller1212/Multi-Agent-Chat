@@ -1,7 +1,8 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { clearVault } from '../../lib/apiKeyVault';
 import { cloneScenario, saveScenario } from '../../lib/scenario/loader';
+import { exportRunCSV, downloadCSV } from '../../lib/outcomes/csv-export';
 import { ResearchShell } from './ResearchShell';
 import { Library } from './Library';
 import { RunDashboard } from './RunDashboard';
@@ -114,18 +115,172 @@ function SettingsScreen({ onSignOut }: { onSignOut: () => void }) {
   );
 }
 
-function PlaceholderScreen({ title, sub, icon }: { title: string; sub: string; icon: string }) {
+interface RunRow {
+  id: string;
+  name: string | null;
+  status: string | null;
+  created_at: string | null;
+  total_dyads: number | null;
+  completed_dyads: number | null;
+}
+
+function ResultsScreen() {
+  const [runs, setRuns] = useState<RunRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState<string | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      const { data } = await supabase
+        .from('runs')
+        .select('id, name, status, created_at, total_dyads, completed_dyads')
+        .eq('status', 'completed')
+        .order('created_at', { ascending: false })
+        .limit(50);
+      setRuns((data ?? []) as RunRow[]);
+      setLoading(false);
+    })();
+  }, []);
+
+  const handleDownload = async (runId: string, name: string | null) => {
+    setDownloading(runId);
+    const csv = await exportRunCSV(runId);
+    if (csv) downloadCSV(csv, `${name ?? runId}.csv`);
+    setDownloading(null);
+  };
+
   return (
     <div>
       <div className="r-page-head">
-        <h1 className="r-page-title">{title}</h1>
-        <p className="r-page-sub">{sub}</p>
+        <h1 className="r-page-title">Results</h1>
+        <p className="r-page-sub">Completed experiment runs — download CSV outputs.</p>
+      </div>
+      <div className="r-page-body">
+        {loading ? (
+          <p style={{ color: 'var(--text-3)', fontSize: 13 }}>Loading…</p>
+        ) : runs.length === 0 ? (
+          <div style={{ textAlign: 'center', color: 'var(--text-3)', paddingTop: 60 }}>
+            <Icon name="chart" size={48} stroke={1} />
+            <p style={{ marginTop: 16, fontSize: 14 }}>No completed runs yet.</p>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 720 }}>
+            {runs.map(run => (
+              <div
+                key={run.id}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '12px 16px', border: '1px solid var(--line-1)',
+                  borderRadius: 8, background: 'var(--surface-panel)',
+                }}
+              >
+                <div>
+                  <div style={{ fontFamily: 'var(--font-h)', fontSize: 14, fontWeight: 700, color: 'var(--text-1)' }}>
+                    {run.name ?? run.id.slice(0, 8)}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
+                    {run.completed_dyads ?? 0} / {run.total_dyads ?? '?'} dyads &middot;{' '}
+                    {run.created_at ? new Date(run.created_at).toLocaleDateString() : '—'}
+                  </div>
+                </div>
+                <button
+                  className="r-btn r-btn-secondary r-btn-sm"
+                  onClick={() => void handleDownload(run.id, run.name)}
+                  disabled={downloading === run.id}
+                >
+                  <Icon name="download" size={13} />
+                  {downloading === run.id ? 'Downloading…' : 'Download CSV'}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function QuickChatScreen({ onBack }: { onBack: () => void }) {
+  return (
+    <div>
+      <div className="r-page-head">
+        <h1 className="r-page-title">Quick Chat</h1>
+        <p className="r-page-sub">Two-agent conversations in legacy mode.</p>
       </div>
       <div className="r-page-body" style={{ display: 'flex', justifyContent: 'center', paddingTop: 60 }}>
         <div style={{ textAlign: 'center', color: 'var(--text-3)' }}>
-          <Icon name={icon} size={48} stroke={1} />
-          <p style={{ marginTop: 16, fontSize: 14 }}>Coming soon — this section is under development.</p>
+          <Icon name="chat" size={48} stroke={1} />
+          <p style={{ marginTop: 16, fontSize: 14 }}>Use Quick Chat to run informal two-agent conversations.</p>
+          <button className="r-btn r-btn-primary" style={{ marginTop: 16 }} onClick={onBack}>
+            Back to classic view
+          </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+interface ConversationRow {
+  id: string;
+  created_at: string | null;
+  scenario_title: string | null;
+  message_count: number | null;
+}
+
+function HistoryScreen() {
+  const [rows, setRows] = useState<ConversationRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    void (async () => {
+      const { data } = await supabase
+        .from('conversations')
+        .select('id, created_at, scenario_title, message_count')
+        .order('created_at', { ascending: false })
+        .limit(50);
+      setRows((data ?? []) as ConversationRow[]);
+      setLoading(false);
+    })();
+  }, []);
+
+  return (
+    <div>
+      <div className="r-page-head">
+        <h1 className="r-page-title">History</h1>
+        <p className="r-page-sub">Recent conversations and experiments.</p>
+      </div>
+      <div className="r-page-body">
+        {loading ? (
+          <p style={{ color: 'var(--text-3)', fontSize: 13 }}>Loading…</p>
+        ) : rows.length === 0 ? (
+          <div style={{ textAlign: 'center', color: 'var(--text-3)', paddingTop: 60 }}>
+            <Icon name="clock" size={48} stroke={1} />
+            <p style={{ marginTop: 16, fontSize: 14 }}>No history yet.</p>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 720 }}>
+            {rows.map(row => (
+              <div
+                key={row.id}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '10px 14px', border: '1px solid var(--line-1)',
+                  borderRadius: 8, background: 'var(--surface-panel)',
+                }}
+              >
+                <div>
+                  <div style={{ fontFamily: 'var(--font-h)', fontSize: 13, fontWeight: 700, color: 'var(--text-1)' }}>
+                    {row.scenario_title ?? 'Untitled conversation'}
+                  </div>
+                  <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 2 }}>
+                    {row.message_count ?? '?'} messages &middot;{' '}
+                    {row.created_at ? new Date(row.created_at).toLocaleString() : '—'}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -440,6 +440,24 @@ function VizPill({ children }: { children: ReactNode }) {
 /* ------------------------------------------------------------------ */
 
 function AgentsPane() {
+  const [agents, setAgents] = useState<Agent[]>(AGENTS);
+
+  const addAgent = (role: 'domain' | 'supervisor') => {
+    const id = `agent-${Date.now()}`;
+    const newAgent: Agent = {
+      id,
+      name: role === 'supervisor' ? 'Supervisor' : 'Agent',
+      role,
+      desc: '',
+      provider: 'OpenAI',
+      model: 'gpt-4o',
+      temp: role === 'supervisor' ? 0.0 : 0.7,
+      max: role === 'supervisor' ? 200 : 800,
+      color: role === 'supervisor' ? 'grey' : 'blue',
+    };
+    setAgents(prev => [...prev, newAgent]);
+  };
+
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 24, alignItems: 'flex-start' }}>
       {/* Main */}
@@ -454,13 +472,13 @@ function AgentsPane() {
             </p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button className="r-btn r-btn-secondary r-btn-sm"><Icon name="plus" size={13} /> Add supervisor</button>
-            <button className="r-btn r-btn-primary r-btn-sm"><Icon name="plus" size={13} /> Add domain agent</button>
+            <button className="r-btn r-btn-secondary r-btn-sm" onClick={() => addAgent('supervisor')}><Icon name="plus" size={13} /> Add supervisor</button>
+            <button className="r-btn r-btn-primary r-btn-sm" onClick={() => addAgent('domain')}><Icon name="plus" size={13} /> Add domain agent</button>
           </div>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {AGENTS.map(a => <AgentCard key={a.id} a={a} />)}
+          {agents.map(a => <AgentCard key={a.id} a={a} />)}
         </div>
       </div>
 
@@ -513,8 +531,25 @@ function DefaultRow({ label, value, last }: { label: string; value: string; last
 /*  Tab 2 — Turn policy                                               */
 /* ------------------------------------------------------------------ */
 
+interface StopCondition {
+  id: string;
+  chip: string;
+  chipColor: 'blue' | 'grey';
+  text: string;
+}
+
 function PolicyPane() {
   const [selected, setSelected] = useState('strict');
+  const [stopConditions, setStopConditions] = useState<StopCondition[]>([
+    { id: 'accept', chip: '[ACCEPT]', chipColor: 'blue', text: 'token in any agent message' },
+    { id: 'walkaway', chip: '[WALKAWAY]', chipColor: 'blue', text: 'token in any agent message' },
+    { id: 'cap', chip: 'round >= 12', chipColor: 'grey', text: 'Hard cap on rounds' },
+  ]);
+
+  const addCondition = () => {
+    const id = `cond-${Date.now()}`;
+    setStopConditions(prev => [...prev, { id, chip: '[STOP]', chipColor: 'grey', text: 'Custom stop condition' }]);
+  };
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 24, alignItems: 'flex-start' }}>
@@ -661,10 +696,10 @@ function PolicyPane() {
                 Stop conditions
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <StopRow chip="[ACCEPT]" chipColor="blue" text="token in any agent message" />
-                <StopRow chip="[WALKAWAY]" chipColor="blue" text="token in any agent message" />
-                <StopRow chip="round >= 12" chipColor="grey" text="Hard cap on rounds" />
-                <button className="r-btn r-btn-ghost r-btn-sm" style={{ alignSelf: 'flex-start' }}>
+                {stopConditions.map(c => (
+                  <StopRow key={c.id} chip={c.chip} chipColor={c.chipColor} text={c.text} />
+                ))}
+                <button className="r-btn r-btn-ghost r-btn-sm" style={{ alignSelf: 'flex-start' }} onClick={addCondition}>
                   <Icon name="plus" size={12} /> Add condition
                 </button>
               </div>
@@ -717,6 +752,19 @@ function StopRow({ chip, chipColor, text }: { chip: string; chipColor: 'blue' | 
 /* ------------------------------------------------------------------ */
 
 function PromptsPane() {
+  const [selectedAgent, setSelectedAgent] = useState('buyer');
+  const [slots, setSlots] = useState<Slot[]>(SLOTS);
+
+  const handleDuplicate = () => {
+    const label = AGENTS.find(a => a.id === selectedAgent)?.name ?? selectedAgent;
+    alert(`Prompt for "${label}" duplicated. (Not yet persisted — coming soon.)`);
+  };
+
+  const addSlot = () => {
+    const name = `SLOT_${Date.now()}`;
+    setSlots(prev => [...prev, { name, desc: 'Custom slot', type: 'string' }]);
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
@@ -740,7 +788,8 @@ function PromptsPane() {
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <select
-            defaultValue="buyer"
+            value={selectedAgent}
+            onChange={e => setSelectedAgent(e.target.value)}
             style={{
               width: 220, padding: '6px 10px', borderRadius: 6,
               border: '1px solid var(--line-2)', background: 'var(--surface-panel)',
@@ -752,7 +801,7 @@ function PromptsPane() {
             <option value="judge">Judge &middot; system prompt</option>
             <option value="analyst">Analyst &middot; system prompt</option>
           </select>
-          <button className="r-btn r-btn-secondary r-btn-sm"><Icon name="copy" size={13} /> Duplicate</button>
+          <button className="r-btn r-btn-secondary r-btn-sm" onClick={handleDuplicate}><Icon name="copy" size={13} /> Duplicate</button>
         </div>
       </div>
 
@@ -836,7 +885,7 @@ function PromptsPane() {
           >
             Slots used in this prompt
           </h4>
-          <button className="r-btn r-btn-ghost r-btn-sm"><Icon name="plus" size={13} /> Add slot</button>
+          <button className="r-btn r-btn-ghost r-btn-sm" onClick={addSlot}><Icon name="plus" size={13} /> Add slot</button>
         </div>
 
         {/* Table header */}
@@ -857,14 +906,14 @@ function PromptsPane() {
         </div>
 
         {/* Table rows */}
-        {SLOTS.map((s, idx) => (
+        {slots.map((s, idx) => (
           <div
             key={s.name}
             style={{
               display: 'grid', gridTemplateColumns: '220px 90px 1fr 200px',
               gap: 12, padding: '10px 14px', alignItems: 'center',
               fontSize: 12.5,
-              borderBottom: idx < SLOTS.length - 1 ? '1px solid var(--line-1)' : 'none',
+              borderBottom: idx < slots.length - 1 ? '1px solid var(--line-1)' : 'none',
             }}
           >
             <div>
@@ -935,9 +984,15 @@ const UTILITY_OPTIONS: UtilOption[] = [
 
 function OutcomesPane() {
   const [selectedUtil, setSelectedUtil] = useState('piesplit');
+  const [csvColumns, setCsvColumns] = useState<CsvColumn[]>(CSV_COLUMNS);
 
   const srcChipColor = (src: string) =>
     src === 'auto' ? 'grey' : src === 'extracted' ? 'blue' : 'orange';
+
+  const addColumn = () => {
+    const col = `col_${Date.now()}`;
+    setCsvColumns(prev => [...prev, { col, type: 'string', src: 'derived', required: false, where: 'Custom' }]);
+  };
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 24, alignItems: 'flex-start' }}>
@@ -952,7 +1007,7 @@ function OutcomesPane() {
               Define the columns of your output CSV. One row per dyad.
             </p>
           </div>
-          <button className="r-btn r-btn-secondary r-btn-sm"><Icon name="plus" size={13} /> Add column</button>
+          <button className="r-btn r-btn-secondary r-btn-sm" onClick={addColumn}><Icon name="plus" size={13} /> Add column</button>
         </div>
 
         {/* CSV table */}
@@ -982,14 +1037,14 @@ function OutcomesPane() {
           </div>
 
           {/* Rows */}
-          {CSV_COLUMNS.map((row, idx) => (
+          {csvColumns.map((row, idx) => (
             <div
               key={row.col}
               style={{
                 display: 'grid', gridTemplateColumns: '32px 200px 90px 1fr 80px 40px',
                 gap: 12, padding: '10px 14px', alignItems: 'center',
                 fontSize: 12.5,
-                borderBottom: idx < CSV_COLUMNS.length - 1 ? '1px solid var(--line-1)' : 'none',
+                borderBottom: idx < csvColumns.length - 1 ? '1px solid var(--line-1)' : 'none',
               }}
             >
               <div style={{ color: 'var(--text-4)', fontFamily: 'var(--font-mono)' }}>{idx + 1}</div>

@@ -109,7 +109,12 @@ function Topbar({ breadcrumb, onSignOut }: { breadcrumb: string[]; onSignOut?: (
 
       {/* Right actions */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <button className="r-btn r-btn-ghost r-btn-sm" style={{ gap: 6 }}>
+        <button
+          className="r-btn r-btn-ghost r-btn-sm"
+          style={{ gap: 6 }}
+          title="Coming soon"
+          onClick={() => { /* docs link not yet published */ }}
+        >
           <Icon name="help" size={14} /> Docs
         </button>
         <button

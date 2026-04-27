@@ -416,6 +416,7 @@ export function Library({ onEditScenario, onCloneScenario, onNewScenario, onView
   const [yourCards, setYourCards] = useState<MockYourScenario[]>(MOCK_YOUR_SCENARIOS);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const seededRef = useRef(false);
+  const featuredRef = useRef<HTMLDivElement | null>(null);
 
   const fetchScenarios = useCallback(async () => {
     try {
@@ -498,7 +499,10 @@ export function Library({ onEditScenario, onCloneScenario, onNewScenario, onView
             </p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button className="r-btn r-btn-secondary">
+            <button
+              className="r-btn r-btn-secondary"
+              onClick={() => featuredRef.current?.scrollIntoView({ behavior: 'smooth' })}
+            >
               <Icon name="book" size={14} /> Browse paper-replications
             </button>
             <button className="r-btn r-btn-primary" onClick={onNewScenario}>
@@ -566,10 +570,18 @@ export function Library({ onEditScenario, onCloneScenario, onNewScenario, onView
               }}
             />
 
-            <button className="r-btn r-btn-ghost r-btn-sm">
+            <button
+              className="r-btn r-btn-ghost r-btn-sm"
+              title="Coming soon"
+              style={{ opacity: 0.5, cursor: 'not-allowed' }}
+            >
               <Icon name="filter" size={13} /> More filters
             </button>
-            <button className="r-btn r-btn-ghost r-btn-sm">
+            <button
+              className="r-btn r-btn-ghost r-btn-sm"
+              title="Coming soon"
+              style={{ opacity: 0.5, cursor: 'not-allowed' }}
+            >
               <Icon name="sortAsc" size={13} /> Most used
             </button>
           </div>
@@ -619,7 +631,7 @@ export function Library({ onEditScenario, onCloneScenario, onNewScenario, onView
             {/* Featured templates */}
             {featured.length > 0 && (
               <>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 12, marginTop: 28 }}>
+                <div ref={featuredRef} style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 12, marginTop: 28 }}>
                   <h2
                     style={{
                       fontFamily: 'var(--font-h)', fontSize: 14, fontWeight: 700,

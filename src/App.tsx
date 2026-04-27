@@ -44,7 +44,7 @@ type View = 'landing' | 'auth' | 'app' | 'research' | 'privacy' | 'terms';
 function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<View>('research');
+  const [view, setView] = useState<View>('landing');
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signup');
   const [workshopData, setWorkshopData] = useState<WorkshopData | null>(null);
   const [workshopPublicInfo, setWorkshopPublicInfo] = useState<WorkshopPublicInfo | null>(null);
@@ -160,7 +160,7 @@ function App() {
           trackWorkshopSignup(session.access_token).catch(() => {});
         }
       }
-      if (!session && view !== 'research') setView('landing');
+      if (!session) setView('landing');
     });
 
     return () => subscription.unsubscribe();
@@ -246,10 +246,10 @@ function App() {
     return <Suspense fallback={suspenseFallback}>{storageNotice}<Auth onAuthSuccess={() => setView('research')} initialIsSignUp={authMode === 'signup'} workshopInfo={workshopPublicInfo} /></Suspense>;
   }
 
-  if (view === 'research') {
+  if (view === 'research' && session) {
     return (
       <Suspense fallback={suspenseFallback}>
-        <ResearchLayout onBack={() => setView(session ? 'app' : 'landing')} />
+        <ResearchLayout onBack={() => setView('landing')} />
       </Suspense>
     );
   }
