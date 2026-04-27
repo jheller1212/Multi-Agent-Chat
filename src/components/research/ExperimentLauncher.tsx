@@ -383,14 +383,14 @@ export function ExperimentLauncher({ scenarioId, scenarioName, onLaunch, onBack 
           const nReasonable = nPerCell >= 1 && nPerCell <= 500;
           const concurrencyOk = concurrency >= 1 && concurrency <= 20;
 
-          const checks: Array<{ label: string; ok: boolean; detail: string; action?: () => void; actionLabel?: string }> = [
-            { label: 'Experiment name', ok: hasName, detail: hasName ? name : 'Enter a name above' },
-            { label: 'Scenario selected', ok: hasScenario, detail: hasScenario ? `ID: ${scenarioId?.slice(0, 8)}...` : 'Go back and select a scenario first' },
-            { label: 'API key configured', ok: hasAnyKey, detail: hasAnyKey ? `OpenAI key (${vault.gpt4.slice(0, 7)}...)` : 'No provider keys found', action: () => setShowKeyInput(true), actionLabel: 'Add key' },
-            { label: 'Factors defined', ok: hasFactors, detail: hasFactors ? `${factors.length} factor(s), ${cellCount} cells` : 'Each factor needs at least 2 levels' },
-            { label: 'N per cell', ok: nReasonable, detail: nReasonable ? `${nPerCell} dyads × ${cellCount} cells = ${totalDyads} total` : 'Must be between 1 and 500' },
-            { label: 'Concurrency', ok: concurrencyOk, detail: concurrencyOk ? `${concurrency} parallel dyads` : 'Must be between 1 and 20' },
-            { label: 'Mode', ok: true, detail: devMode ? 'Dev mode — supervisors skipped (fast + cheap)' : 'Production — full supervisor pipeline' },
+          const checks: Array<{ label: string; ok: boolean; detail: string; tooltip: string; action?: () => void; actionLabel?: string }> = [
+            { label: 'Experiment name', ok: hasName, detail: hasName ? name : 'Enter a name above', tooltip: 'Give your experiment a descriptive name so you can identify it later in the Results tab. E.g., "Capability asymmetry — pilot run".' },
+            { label: 'Scenario selected', ok: hasScenario, detail: hasScenario ? `ID: ${scenarioId?.slice(0, 8)}...` : 'Go back and select a scenario first', tooltip: 'A scenario defines the agents, prompts, turn-taking policy, and outcome schema. Clone one from the Library or create a blank scenario first.' },
+            { label: 'API key configured', ok: hasAnyKey, detail: hasAnyKey ? `OpenAI key (${vault.gpt4.slice(0, 7)}...)` : 'No provider keys found', tooltip: 'You need at least one LLM provider API key (e.g., OpenAI, Anthropic). The key is stored encrypted in your browser and used to make calls to the provider\'s API. Get one at platform.openai.com/api-keys.', action: () => setShowKeyInput(true), actionLabel: 'Add key' },
+            { label: 'Factors defined', ok: hasFactors, detail: hasFactors ? `${factors.length} factor(s), ${cellCount} cells` : 'Each factor needs at least 2 levels', tooltip: 'Factors are the independent variables in your experiment. Each factor has levels (e.g., "capability: strong, weak"). The platform cross-joins all factors to create cells. Each cell gets N dyads.' },
+            { label: 'N per cell', ok: nReasonable, detail: nReasonable ? `${nPerCell} dyads × ${cellCount} cells = ${totalDyads} total` : 'Must be between 1 and 500', tooltip: 'How many agent-to-agent conversations to run per experimental cell. Higher N = more statistical power but more API cost. Start with 2–4 for testing, 50–150 for production.' },
+            { label: 'Concurrency', ok: concurrencyOk, detail: concurrencyOk ? `${concurrency} parallel dyads` : 'Must be between 1 and 20', tooltip: 'How many dyads run simultaneously. Higher = faster but more API rate-limit risk. 5 is a safe default. Reduce to 1–2 if you hit rate limits.' },
+            { label: 'Mode', ok: true, detail: devMode ? 'Dev mode — supervisors skipped (fast + cheap)' : 'Production — full supervisor pipeline', tooltip: 'Dev mode skips supervisor agents (judge, analyst, appraiser) to save API costs during testing. Use Production mode for real data collection — supervisors classify rounds, extract values, and score outcomes.' },
           ];
 
           const allOk = checks.every(c => c.ok);
@@ -411,25 +411,39 @@ export function ExperimentLauncher({ scenarioId, scenarioName, onLaunch, onBack 
                   <div
                     key={i}
                     style={{
-                      display: 'flex', alignItems: 'center', gap: 10,
+                      display: 'flex', alignItems: 'flex-start', gap: 10,
                       padding: '10px 0',
                       borderBottom: i < checks.length - 1 ? '1px solid var(--line-1)' : 'none',
                     }}
                   >
                     <div style={{
                       width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
-                      display: 'grid', placeItems: 'center',
+                      display: 'grid', placeItems: 'center', marginTop: 1,
                       background: c.ok ? 'rgba(46,163,107,0.12)' : 'var(--accent-1-soft)',
                       color: c.ok ? 'var(--success)' : 'var(--accent-1)',
                     }}>
                       <Icon name={c.ok ? 'check' : 'x'} size={12} stroke={2.5} />
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)' }}>{c.label}</div>
-                      <div style={{ fontSize: 11.5, color: c.ok ? 'var(--text-3)' : 'var(--accent-1)', marginTop: 1 }}>{c.detail}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)' }}>{c.label}</span>
+                        <span
+                          title={c.tooltip}
+                          style={{
+                            width: 16, height: 16, borderRadius: '50%',
+                            background: 'var(--surface-sunken)', border: '1px solid var(--line-1)',
+                            display: 'inline-grid', placeItems: 'center',
+                            fontSize: 10, fontWeight: 700, color: 'var(--text-4)',
+                            cursor: 'help', flexShrink: 0,
+                          }}
+                        >
+                          ?
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 11.5, color: c.ok ? 'var(--text-3)' : 'var(--accent-1)', marginTop: 2 }}>{c.detail}</div>
                     </div>
                     {!c.ok && c.action && (
-                      <button className="r-btn r-btn-secondary r-btn-sm" onClick={c.action}>
+                      <button className="r-btn r-btn-secondary r-btn-sm" onClick={c.action} style={{ marginTop: 1 }}>
                         {c.actionLabel ?? 'Fix'}
                       </button>
                     )}
