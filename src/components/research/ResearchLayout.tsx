@@ -440,14 +440,23 @@ export function ResearchLayout({ onBack }: ResearchLayoutProps) {
     if (!user) return;
     const blank = await saveScenario({
       name: 'Untitled Scenario',
-      description: '',
+      description: 'A new multi-agent research scenario.',
       isPublic: false,
       isTemplate: false,
-      domainAgents: [],
+      domainAgents: [
+        { name: 'Agent A', description: 'First participant in the conversation.', defaultPromptTemplate: 'You are Agent A. Engage in a natural conversation with Agent B.\n\nGUIDELINES\n- Speak naturally, one message per turn.\n- Keep messages concise (no more than 150 words).' },
+        { name: 'Agent B', description: 'Second participant in the conversation.', defaultPromptTemplate: 'You are Agent B. Engage in a natural conversation with Agent A.\n\nGUIDELINES\n- Speak naturally, one message per turn.\n- Keep messages concise (no more than 150 words).' },
+      ],
       supervisors: [],
-      turnPolicy: { type: 'alternating', roundDefinition: [] },
-      terminationConditions: [{ type: 'turn_cap', maxTurns: 10 }],
-      outcomeSchema: { columns: [] },
+      turnPolicy: { type: 'alternating', roundDefinition: ['Agent A', 'Agent B'] },
+      terminationConditions: [{ type: 'turn_cap', maxTurns: 12 }],
+      outcomeSchema: {
+        columns: [
+          { name: 'dyad_id', type: 'string' },
+          { name: 'outcome', type: 'string', nullable: true },
+          { name: 'rounds_used', type: 'integer' },
+        ],
+      },
     });
     if (blank) {
       setSelectedScenarioId(blank.id);
