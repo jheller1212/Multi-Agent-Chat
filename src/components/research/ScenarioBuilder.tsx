@@ -33,7 +33,7 @@ interface Agent {
   color: 'blue' | 'orange' | 'grey';
 }
 
-const AGENTS: Agent[] = [
+const DEFAULT_AGENTS: Agent[] = [
   { id: 'buyer', name: 'Buyer', role: 'domain', desc: 'Procurement manager negotiating a 12-month supply contract with a target unit price and walk-away threshold.', provider: 'Anthropic', model: 'claude-sonnet-4.5', temp: 0.7, max: 800, color: 'blue' },
   { id: 'seller', name: 'Seller', role: 'domain', desc: 'Sales rep selling on margin who must hit a quarterly volume goal. Holds private floor price.', provider: 'OpenAI', model: 'gpt-4o', temp: 0.7, max: 800, color: 'orange' },
   { id: 'judge', name: 'Judge', role: 'supervisor', desc: 'Classifies each round as Cooperative / Competitive / Stalled. Returns one label + 1-sentence rationale.', provider: 'OpenAI', model: 'gpt-4o-mini', temp: 0.0, max: 200, color: 'grey' },
@@ -47,21 +47,22 @@ interface Slot {
 }
 
 const SLOTS: Slot[] = [
-  { name: 'BUYER_TARGET_PRICE', desc: 'Target unit price the buyer aims for (\u20AC).', type: 'number' },
-  { name: 'BUYER_WALKAWAY', desc: 'Highest price the buyer will accept (\u20AC).', type: 'number' },
-  { name: 'SELLER_FLOOR_PRICE', desc: 'Lowest price the seller can accept (\u20AC).', type: 'number' },
+  { name: 'BUYER_TARGET_PRICE', desc: 'Target unit price the buyer aims for (€).', type: 'number' },
+  { name: 'BUYER_WALKAWAY', desc: 'Highest price the buyer will accept (€).', type: 'number' },
+  { name: 'SELLER_FLOOR_PRICE', desc: 'Lowest price the seller can accept (€).', type: 'number' },
   { name: 'VOLUME_TARGET', desc: 'Annual volume in units.', type: 'number' },
   { name: 'BUYER_CAPABILITY', desc: 'Negotiation skill profile (strong/weak).', type: 'enum' },
 ];
 
-const BUYER_PROMPT = `You are the BUYER, procurement manager at Atrium Logistics.
+const DEFAULT_PROMPTS: Record<string, string> = {
+  buyer: `You are the BUYER, procurement manager at Atrium Logistics.
 
 CONTEXT
 You are negotiating a 12-month supply contract for industrial sensors with the seller. You hold private information about your budget and walk-away.
 
 YOUR PRIVATE INFORMATION
-- Target unit price: \u20AC{BUYER_TARGET_PRICE}
-- Walk-away (highest acceptable): \u20AC{BUYER_WALKAWAY}
+- Target unit price: €{BUYER_TARGET_PRICE}
+- Walk-away (highest acceptable): €{BUYER_WALKAWAY}
 - Annual volume needed: {VOLUME_TARGET} units
 - Capability profile: {BUYER_CAPABILITY}
 
@@ -75,7 +76,51 @@ INSTRUCTIONS
 - If asked directly about your budget, deflect.
 
 When you are ready to accept the seller's offer, end your message with [ACCEPT].
-When you wish to walk away, end with [WALKAWAY].`;
+When you wish to walk away, end with [WALKAWAY].`,
+
+  seller: `You are the SELLER, a sales representative at IndustrialTech Corp.
+
+CONTEXT
+You are negotiating a 12-month supply contract for industrial sensors with the buyer. You must hit quarterly volume targets while protecting your margin.
+
+YOUR PRIVATE INFORMATION
+- Floor price (minimum acceptable): €{SELLER_FLOOR_PRICE}
+- Volume target: {VOLUME_TARGET} units
+- Quarterly quota pressure: high
+
+YOUR PUBLIC GOALS
+- Close a deal at or above your floor price.
+- Meet your quarterly volume goal.
+
+INSTRUCTIONS
+- Speak naturally, as a sales representative would.
+- Make concrete offers (price, volume, term).
+- Do not reveal your floor price.
+
+When you accept the buyer's offer, end with [ACCEPT].
+When you walk away from the negotiation, end with [WALKAWAY].`,
+
+  judge: `You are a neutral JUDGE evaluating a negotiation transcript.
+
+After each round, classify the exchange using exactly one of these labels:
+- Cooperative: Both parties show goodwill, make concessions, or move toward agreement.
+- Competitive: Parties are adversarial, bluffing, or taking hard positions.
+- Stalled: No meaningful movement; parties repeating positions.
+
+Respond with JSON only: {"label": "Cooperative"|"Competitive"|"Stalled", "rationale": "<one sentence>"}`,
+
+  analyst: `You are an ANALYST extracting structured data from negotiation messages.
+
+Extract the most recent concrete offer from the message (if any) and return JSON:
+{
+  "price": <number|null>,
+  "volume": <number|null>,
+  "term_months": <number|null>,
+  "outcome": "deal"|"walkaway"|"ongoing"|null
+}
+
+If no offer is present, return null values. Do not infer — only extract explicit mentions.`,
+};
 
 interface TurnPolicy {
   id: string;
@@ -85,7 +130,7 @@ interface TurnPolicy {
 }
 
 const TURN_POLICIES: TurnPolicy[] = [
-  { id: 'strict', label: 'Strict alternation', desc: 'A \u2192 B \u2192 A \u2192 B. Most common. Predictable for analysis.', recommended: true },
+  { id: 'strict', label: 'Strict alternation', desc: 'A → B → A → B. Most common. Predictable for analysis.', recommended: true },
   { id: 'moderated', label: 'Moderator-driven', desc: 'A supervisor agent picks who speaks each turn. Useful for jury / panel scenarios.', recommended: false },
   { id: 'event', label: 'Event-driven', desc: 'Either agent can speak when triggered (e.g. a deadline elapses). Advanced.', recommended: false },
 ];
@@ -207,7 +252,14 @@ function AsideHeader({ icon, children, warn }: { icon: string; children: ReactNo
 /*  Agent card                                                        */
 /* ------------------------------------------------------------------ */
 
-function AgentCard({ a }: { a: Agent }) {
+interface AgentCardProps {
+  a: Agent;
+  onEdit: (id: string) => void;
+  onCopy: (id: string) => void;
+  onRemove: (id: string) => void;
+}
+
+function AgentCard({ a, onEdit, onCopy, onRemove }: AgentCardProps) {
   const avatarBg = a.color === 'blue' ? 'var(--accent-2-soft)'
     : a.color === 'orange' ? 'var(--accent-1-soft)'
     : 'var(--surface-sunken)';
@@ -217,10 +269,10 @@ function AgentCard({ a }: { a: Agent }) {
 
   const providerColor = PROVIDERS[a.provider]?.color ?? 'var(--text-3)';
 
-  const promptInfo = a.id === 'buyer' ? '212 tokens \u00B7 5 slots'
-    : a.id === 'seller' ? '198 tokens \u00B7 4 slots'
-    : a.id === 'judge' ? '84 tokens \u00B7 0 slots'
-    : '146 tokens \u00B7 1 slot';
+  const promptInfo = a.id === 'buyer' ? '212 tokens · 5 slots'
+    : a.id === 'seller' ? '198 tokens · 4 slots'
+    : a.id === 'judge' ? '84 tokens · 0 slots'
+    : '146 tokens · 1 slot';
 
   return (
     <div
@@ -255,14 +307,20 @@ function AgentCard({ a }: { a: Agent }) {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 2 }}>
-          {(['edit', 'copy', 'trash'] as const).map(icon => (
+          {([
+            { icon: 'edit', title: 'Edit', action: () => onEdit(a.id) },
+            { icon: 'copy', title: 'Duplicate', action: () => onCopy(a.id) },
+            { icon: 'trash', title: 'Remove', action: () => onRemove(a.id) },
+          ] as const).map(({ icon, title, action }) => (
             <button
               key={icon}
-              title={icon === 'edit' ? 'Edit' : icon === 'copy' ? 'Duplicate' : 'Remove'}
+              title={title}
+              onClick={action}
               style={{
                 width: 32, height: 32, borderRadius: 6,
                 background: 'transparent', border: 0,
-                color: 'var(--text-2)', cursor: 'pointer',
+                color: icon === 'trash' ? 'var(--accent-1)' : 'var(--text-2)',
+                cursor: 'pointer',
                 display: 'grid', placeItems: 'center',
               }}
             >
@@ -340,7 +398,7 @@ function SpecCell({ label, children, mono, first, last }: {
 /*  Prompt editor + preview                                           */
 /* ------------------------------------------------------------------ */
 
-function PromptEditor({ value }: { value: string }) {
+function PromptEditor({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const parts: ReactNode[] = [];
   const re = /\{([A-Z_]+)\}/g;
   let last = 0;
@@ -368,14 +426,37 @@ function PromptEditor({ value }: { value: string }) {
   parts.push(<span key={i++}>{value.slice(last)}</span>);
 
   return (
-    <div
-      style={{
-        padding: 16, height: 380, overflow: 'auto',
-        fontFamily: 'var(--font-mono)', fontSize: 12, lineHeight: 1.65,
-        color: 'var(--text-1)', background: 'var(--surface-panel)',
-      }}
-    >
-      <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{parts}</pre>
+    <div style={{ position: 'relative', height: 380 }}>
+      {/* Syntax-highlighted overlay (pointer-events: none so textarea receives clicks) */}
+      <pre
+        aria-hidden
+        style={{
+          position: 'absolute', inset: 0,
+          padding: 16, margin: 0, overflow: 'auto',
+          fontFamily: 'var(--font-mono)', fontSize: 12, lineHeight: 1.65,
+          color: 'transparent', background: 'transparent',
+          whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+          pointerEvents: 'none', zIndex: 1,
+        }}
+      >
+        {parts}
+      </pre>
+      {/* Editable textarea underneath the overlay */}
+      <textarea
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        spellCheck={false}
+        style={{
+          position: 'absolute', inset: 0,
+          padding: 16, width: '100%', height: '100%',
+          fontFamily: 'var(--font-mono)', fontSize: 12, lineHeight: 1.65,
+          color: 'var(--text-1)', background: 'var(--surface-panel)',
+          border: 'none', outline: 'none', resize: 'none',
+          whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+          caretColor: 'var(--text-1)',
+          boxSizing: 'border-box',
+        }}
+      />
     </div>
   );
 }
@@ -436,12 +517,67 @@ function VizPill({ children }: { children: ReactNode }) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Stop condition types                                              */
+/* ------------------------------------------------------------------ */
+
+interface StopCondition {
+  id: string;
+  chip: string;
+  chipColor: 'blue' | 'grey';
+  text: string;
+}
+
+const DEFAULT_STOP_CONDITIONS: StopCondition[] = [
+  { id: 'accept', chip: '[ACCEPT]', chipColor: 'blue', text: 'token in any agent message' },
+  { id: 'walkaway', chip: '[WALKAWAY]', chipColor: 'blue', text: 'token in any agent message' },
+  { id: 'cap', chip: 'round >= 12', chipColor: 'grey', text: 'Hard cap on rounds' },
+];
+
+/* ------------------------------------------------------------------ */
+/*  CSV column types                                                  */
+/* ------------------------------------------------------------------ */
+
+interface CsvColumn {
+  col: string;
+  type: string;
+  src: string;
+  required: boolean;
+  where: string;
+}
+
+const DEFAULT_CSV_COLUMNS: CsvColumn[] = [
+  { col: 'dyad_id', type: 'string', src: 'auto', required: true, where: 'System' },
+  { col: 'cell_id', type: 'string', src: 'auto', required: true, where: 'Experiment cell' },
+  { col: 'outcome', type: 'enum', src: 'extracted', required: true, where: 'Analyst → final[outcome]' },
+  { col: 'final_price', type: 'number', src: 'extracted', required: false, where: 'Analyst → final[price]' },
+  { col: 'rounds_used', type: 'number', src: 'auto', required: true, where: 'Counter' },
+  { col: 'judge_verdict', type: 'enum', src: 'extracted', required: false, where: 'Judge → terminal label' },
+  { col: 'anomaly', type: 'boolean', src: 'derived', required: true, where: 'Heuristic' },
+];
+
+interface UtilOption {
+  id: string;
+  label: string;
+  desc: string;
+}
+
+const UTILITY_OPTIONS: UtilOption[] = [
+  { id: 'piesplit', label: 'Pie-split / surplus', desc: 'Buyer + seller surplus from a single price.' },
+  { id: 'multi', label: 'Multi-issue weighted', desc: 'Sum of issue × weight per side.' },
+  { id: 'binary', label: 'Binary verdict', desc: 'Win / loss / hung.' },
+  { id: 'custom', label: 'Custom expression', desc: 'JS-style scoring expression.' },
+];
+
+/* ------------------------------------------------------------------ */
 /*  Tab 1 — Agents                                                    */
 /* ------------------------------------------------------------------ */
 
-function AgentsPane() {
-  const [agents, setAgents] = useState<Agent[]>(AGENTS);
+interface AgentsPaneProps {
+  agents: Agent[];
+  onChange: (agents: Agent[]) => void;
+}
 
+function AgentsPane({ agents, onChange }: AgentsPaneProps) {
   const addAgent = (role: 'domain' | 'supervisor') => {
     const id = `agent-${Date.now()}`;
     const newAgent: Agent = {
@@ -455,7 +591,22 @@ function AgentsPane() {
       max: role === 'supervisor' ? 200 : 800,
       color: role === 'supervisor' ? 'grey' : 'blue',
     };
-    setAgents(prev => [...prev, newAgent]);
+    onChange([...agents, newAgent]);
+  };
+
+  const handleEdit = (id: string) => {
+    console.log('Edit agent:', id);
+  };
+
+  const handleCopy = (id: string) => {
+    const source = agents.find(a => a.id === id);
+    if (!source) return;
+    const copy: Agent = { ...source, id: `agent-${Date.now()}`, name: `${source.name} (copy)` };
+    onChange([...agents, copy]);
+  };
+
+  const handleRemove = (id: string) => {
+    onChange(agents.filter(a => a.id !== id));
   };
 
   return (
@@ -478,7 +629,15 @@ function AgentsPane() {
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {agents.map(a => <AgentCard key={a.id} a={a} />)}
+          {agents.map(a => (
+            <AgentCard
+              key={a.id}
+              a={a}
+              onEdit={handleEdit}
+              onCopy={handleCopy}
+              onRemove={handleRemove}
+            />
+          ))}
         </div>
       </div>
 
@@ -531,24 +690,17 @@ function DefaultRow({ label, value, last }: { label: string; value: string; last
 /*  Tab 2 — Turn policy                                               */
 /* ------------------------------------------------------------------ */
 
-interface StopCondition {
-  id: string;
-  chip: string;
-  chipColor: 'blue' | 'grey';
-  text: string;
+interface PolicyPaneProps {
+  turnPolicyId: string;
+  stopConditions: StopCondition[];
+  onPolicyChange: (id: string) => void;
+  onStopConditionsChange: (conditions: StopCondition[]) => void;
 }
 
-function PolicyPane() {
-  const [selected, setSelected] = useState('strict');
-  const [stopConditions, setStopConditions] = useState<StopCondition[]>([
-    { id: 'accept', chip: '[ACCEPT]', chipColor: 'blue', text: 'token in any agent message' },
-    { id: 'walkaway', chip: '[WALKAWAY]', chipColor: 'blue', text: 'token in any agent message' },
-    { id: 'cap', chip: 'round >= 12', chipColor: 'grey', text: 'Hard cap on rounds' },
-  ]);
-
+function PolicyPane({ turnPolicyId, stopConditions, onPolicyChange, onStopConditionsChange }: PolicyPaneProps) {
   const addCondition = () => {
     const id = `cond-${Date.now()}`;
-    setStopConditions(prev => [...prev, { id, chip: '[STOP]', chipColor: 'grey', text: 'Custom stop condition' }]);
+    onStopConditionsChange([...stopConditions, { id, chip: '[STOP]', chipColor: 'grey', text: 'Custom stop condition' }]);
   };
 
   return (
@@ -569,11 +721,11 @@ function PolicyPane() {
         {/* Policy cards */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {TURN_POLICIES.map(p => {
-            const isSel = selected === p.id;
+            const isSel = turnPolicyId === p.id;
             return (
               <label
                 key={p.id}
-                onClick={() => setSelected(p.id)}
+                onClick={() => onPolicyChange(p.id)}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 14,
                   background: isSel ? 'rgba(0,162,219,0.04)' : 'var(--surface-panel)',
@@ -751,12 +903,26 @@ function StopRow({ chip, chipColor, text }: { chip: string; chipColor: 'blue' | 
 /*  Tab 3 — Prompts                                                   */
 /* ------------------------------------------------------------------ */
 
-function PromptsPane() {
-  const [selectedAgent, setSelectedAgent] = useState('buyer');
+interface PromptsPaneProps {
+  agents: Agent[];
+  prompts: Record<string, string>;
+  onPromptsChange: (prompts: Record<string, string>) => void;
+}
+
+function PromptsPane({ agents, prompts, onPromptsChange }: PromptsPaneProps) {
+  const [selectedAgentId, setSelectedAgentId] = useState(() => agents[0]?.id ?? 'buyer');
   const [slots, setSlots] = useState<Slot[]>(SLOTS);
 
+  // If selected agent was removed, fall back to first agent
+  const effectiveAgentId = agents.find(a => a.id === selectedAgentId) ? selectedAgentId : (agents[0]?.id ?? '');
+  const currentPrompt = prompts[effectiveAgentId] ?? '';
+
+  const handlePromptChange = (value: string) => {
+    onPromptsChange({ ...prompts, [effectiveAgentId]: value });
+  };
+
   const handleDuplicate = () => {
-    const label = AGENTS.find(a => a.id === selectedAgent)?.name ?? selectedAgent;
+    const label = agents.find(a => a.id === effectiveAgentId)?.name ?? effectiveAgentId;
     alert(`Prompt for "${label}" duplicated. (Not yet persisted — coming soon.)`);
   };
 
@@ -788,18 +954,17 @@ function PromptsPane() {
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <select
-            value={selectedAgent}
-            onChange={e => setSelectedAgent(e.target.value)}
+            value={effectiveAgentId}
+            onChange={e => setSelectedAgentId(e.target.value)}
             style={{
               width: 220, padding: '6px 10px', borderRadius: 6,
               border: '1px solid var(--line-2)', background: 'var(--surface-panel)',
               fontFamily: 'var(--font-ui)', fontSize: 13, color: 'var(--text-1)',
             }}
           >
-            <option value="buyer">Buyer &middot; system prompt</option>
-            <option value="seller">Seller &middot; system prompt</option>
-            <option value="judge">Judge &middot; system prompt</option>
-            <option value="analyst">Analyst &middot; system prompt</option>
+            {agents.map(a => (
+              <option key={a.id} value={a.id}>{a.name} · system prompt</option>
+            ))}
           </select>
           <button className="r-btn r-btn-secondary r-btn-sm" onClick={handleDuplicate}><Icon name="copy" size={13} /> Duplicate</button>
         </div>
@@ -826,11 +991,11 @@ function PromptsPane() {
               Prompt template
             </span>
             <div style={{ display: 'flex', gap: 6 }}>
-              <span className="r-chip r-chip-grey" style={{ fontFamily: 'var(--font-num)' }}>212 tokens</span>
-              <span className="r-chip r-chip-blue">5 slots</span>
+              <span className="r-chip r-chip-grey" style={{ fontFamily: 'var(--font-num)' }}>{Math.round(currentPrompt.length / 4)} tokens</span>
+              <span className="r-chip r-chip-blue">{(currentPrompt.match(/\{[A-Z_]+\}/g) ?? []).length} slots</span>
             </div>
           </div>
-          <PromptEditor value={BUYER_PROMPT} />
+          <PromptEditor value={currentPrompt} onChange={handlePromptChange} />
         </div>
 
         {/* Preview column */}
@@ -849,7 +1014,7 @@ function PromptsPane() {
             }}
           >
             <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-3)', fontWeight: 600 }}>
-              Preview &middot; cell A1
+              Preview · cell A1
             </span>
             <div style={{ display: 'flex', gap: 6 }}>
               <span className="r-chip r-chip-grey">price=80</span>
@@ -857,7 +1022,7 @@ function PromptsPane() {
               <span className="r-chip r-chip-grey">strong</span>
             </div>
           </div>
-          <PromptPreview value={BUYER_PROMPT} subs={PREVIEW_SUBS} />
+          <PromptPreview value={currentPrompt} subs={PREVIEW_SUBS} />
         </div>
       </div>
 
@@ -950,48 +1115,24 @@ function PromptsPane() {
 /*  Tab 4 — Outcomes                                                  */
 /* ------------------------------------------------------------------ */
 
-interface CsvColumn {
-  col: string;
-  type: string;
-  src: string;
-  required: boolean;
-  where: string;
+interface OutcomesPaneProps {
+  csvColumns: CsvColumn[];
+  utilityFunction: string;
+  onCsvColumnsChange: (cols: CsvColumn[]) => void;
+  onUtilityFunctionChange: (id: string) => void;
 }
 
-const CSV_COLUMNS: CsvColumn[] = [
-  { col: 'dyad_id', type: 'string', src: 'auto', required: true, where: 'System' },
-  { col: 'cell_id', type: 'string', src: 'auto', required: true, where: 'Experiment cell' },
-  { col: 'outcome', type: 'enum', src: 'extracted', required: true, where: 'Analyst \u2192 final[outcome]' },
-  { col: 'final_price', type: 'number', src: 'extracted', required: false, where: 'Analyst \u2192 final[price]' },
-  { col: 'rounds_used', type: 'number', src: 'auto', required: true, where: 'Counter' },
-  { col: 'judge_verdict', type: 'enum', src: 'extracted', required: false, where: 'Judge \u2192 terminal label' },
-  { col: 'anomaly', type: 'boolean', src: 'derived', required: true, where: 'Heuristic' },
-];
-
-interface UtilOption {
-  id: string;
-  label: string;
-  desc: string;
-  sel: boolean;
-}
-
-const UTILITY_OPTIONS: UtilOption[] = [
-  { id: 'piesplit', label: 'Pie-split / surplus', desc: 'Buyer + seller surplus from a single price.', sel: true },
-  { id: 'multi', label: 'Multi-issue weighted', desc: 'Sum of issue \u00D7 weight per side.', sel: false },
-  { id: 'binary', label: 'Binary verdict', desc: 'Win / loss / hung.', sel: false },
-  { id: 'custom', label: 'Custom expression', desc: 'JS-style scoring expression.', sel: false },
-];
-
-function OutcomesPane() {
-  const [selectedUtil, setSelectedUtil] = useState('piesplit');
-  const [csvColumns, setCsvColumns] = useState<CsvColumn[]>(CSV_COLUMNS);
-
+function OutcomesPane({ csvColumns, utilityFunction, onCsvColumnsChange, onUtilityFunctionChange }: OutcomesPaneProps) {
   const srcChipColor = (src: string) =>
     src === 'auto' ? 'grey' : src === 'extracted' ? 'blue' : 'orange';
 
   const addColumn = () => {
     const col = `col_${Date.now()}`;
-    setCsvColumns(prev => [...prev, { col, type: 'string', src: 'derived', required: false, where: 'Custom' }]);
+    onCsvColumnsChange([...csvColumns, { col, type: 'string', src: 'derived', required: false, where: 'Custom' }]);
+  };
+
+  const removeColumn = (col: string) => {
+    onCsvColumnsChange(csvColumns.filter(c => c.col !== col));
   };
 
   return (
@@ -1062,13 +1203,15 @@ function OutcomesPane() {
               </div>
               <div>
                 <button
+                  title="Delete column"
+                  onClick={() => removeColumn(row.col)}
                   style={{
                     width: 32, height: 32, borderRadius: 6,
-                    background: 'transparent', border: 0, color: 'var(--text-2)',
+                    background: 'transparent', border: 0, color: 'var(--accent-1)',
                     cursor: 'pointer', display: 'grid', placeItems: 'center',
                   }}
                 >
-                  <Icon name="moreH" size={14} />
+                  <Icon name="trash" size={14} />
                 </button>
               </div>
             </div>
@@ -1090,11 +1233,11 @@ function OutcomesPane() {
         </p>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
           {UTILITY_OPTIONS.map(u => {
-            const isSel = selectedUtil === u.id;
+            const isSel = utilityFunction === u.id;
             return (
               <label
                 key={u.id}
-                onClick={() => setSelectedUtil(u.id)}
+                onClick={() => onUtilityFunctionChange(u.id)}
                 style={{
                   display: 'flex', gap: 12, alignItems: 'flex-start',
                   background: isSel ? 'rgba(0,162,219,0.04)' : 'var(--surface-panel)',
@@ -1170,38 +1313,46 @@ function formatTimeAgo(date: Date): string {
 }
 
 /** Build a Scenario-compatible config from the current mock data (used as defaults for new scenarios). */
-function buildDefaultConfig(): Omit<Scenario, 'id' | 'userId' | 'createdAt' | 'updatedAt'> {
+function buildDefaultConfig(
+  agents: Agent[],
+  csvColumns: CsvColumn[],
+  utilityFunction: string,
+  prompts: Record<string, string>,
+): Omit<Scenario, 'id' | 'userId' | 'createdAt' | 'updatedAt'> & { name: string; description: string } {
   return {
     name: 'B2B Renegotiation — capability variant',
     description: 'Buyer-seller negotiation with judge and analyst supervisors.',
     isPublic: false,
     isTemplate: false,
-    domainAgents: AGENTS.filter(a => a.role === 'domain').map(a => ({
+    domainAgents: agents.filter(a => a.role === 'domain').map(a => ({
       name: a.name,
       description: a.desc,
-      defaultPromptTemplate: '',
+      defaultPromptTemplate: prompts[a.id] ?? '',
     })),
-    supervisors: AGENTS.filter(a => a.role === 'supervisor').map(a => ({
+    supervisors: agents.filter(a => a.role === 'supervisor').map(a => ({
       name: a.name,
       type: 'classifier' as const,
       timing: 'per_round' as const,
       outputSchema: {},
-      promptTemplate: '',
+      promptTemplate: prompts[a.id] ?? '',
     })),
     turnPolicy: {
       type: 'alternating',
-      roundDefinition: ['Buyer', 'Seller'],
+      roundDefinition: agents.filter(a => a.role === 'domain').map(a => a.name),
     },
     terminationConditions: [
       { type: 'turn_cap', maxTurns: 12 },
     ],
     outcomeSchema: {
-      columns: CSV_COLUMNS.map(c => ({
+      columns: csvColumns.map(c => ({
         name: c.col,
         type: c.type as 'string' | 'integer' | 'float',
         nullable: !c.required,
       })),
-      utilityFunction: 'weighted_sum',
+      utilityFunction: utilityFunction === 'piesplit' ? 'weighted_sum'
+        : utilityFunction === 'binary' ? 'single_binary'
+        : utilityFunction === 'multi' ? 'multi_class'
+        : 'custom',
     },
   };
 }
@@ -1226,6 +1377,15 @@ export function ScenarioBuilder({ scenarioId, onUseInExperiment }: ScenarioBuild
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [lastSavedLabel, setLastSavedLabel] = useState<string>('');
   const [showExperimentMsg, setShowExperimentMsg] = useState(false);
+
+  // Lifted sub-pane state
+  const [agents, setAgents] = useState<Agent[]>(DEFAULT_AGENTS);
+  const [turnPolicyId, setTurnPolicyId] = useState('strict');
+  const [stopConditions, setStopConditions] = useState<StopCondition[]>(DEFAULT_STOP_CONDITIONS);
+  const [prompts, setPrompts] = useState<Record<string, string>>(DEFAULT_PROMPTS);
+  const [csvColumns, setCsvColumns] = useState<CsvColumn[]>(DEFAULT_CSV_COLUMNS);
+  const [utilityFunction, setUtilityFunction] = useState('piesplit');
+
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dirty = useRef(false);
 
@@ -1255,6 +1415,52 @@ export function ScenarioBuilder({ scenarioId, onUseInExperiment }: ScenarioBuild
         setScenarioDesc(loaded.description);
         setCurrentId(loaded.id);
         setLastSaved(new Date(loaded.updatedAt));
+
+        // Hydrate lifted state from loaded scenario
+        const loadedAgents: Agent[] = [
+          ...loaded.domainAgents.map((a, idx): Agent => ({
+            id: `domain-${idx}`,
+            name: a.name,
+            role: 'domain',
+            desc: a.description,
+            provider: 'OpenAI',
+            model: 'gpt-4o',
+            temp: 0.7,
+            max: 800,
+            color: idx === 0 ? 'blue' : 'orange',
+          })),
+          ...loaded.supervisors.map((s, idx): Agent => ({
+            id: `supervisor-${idx}`,
+            name: s.name,
+            role: 'supervisor',
+            desc: '',
+            provider: 'OpenAI',
+            model: 'gpt-4o-mini',
+            temp: 0.0,
+            max: 200,
+            color: 'grey',
+          })),
+        ];
+        setAgents(loadedAgents);
+
+        const loadedPrompts: Record<string, string> = {};
+        loaded.domainAgents.forEach((a, idx) => {
+          loadedPrompts[`domain-${idx}`] = a.defaultPromptTemplate;
+        });
+        loaded.supervisors.forEach((s, idx) => {
+          loadedPrompts[`supervisor-${idx}`] = s.promptTemplate;
+        });
+        setPrompts(loadedPrompts);
+
+        if (loaded.outcomeSchema.columns.length > 0) {
+          setCsvColumns(loaded.outcomeSchema.columns.map(c => ({
+            col: c.name,
+            type: c.type,
+            src: 'auto',
+            required: !c.nullable,
+            where: 'Loaded',
+          })));
+        }
       }
       setLoading(false);
     })();
@@ -1263,19 +1469,20 @@ export function ScenarioBuilder({ scenarioId, onUseInExperiment }: ScenarioBuild
 
   const doSave = useCallback(async () => {
     setSaving(true);
+    const defaults = buildDefaultConfig(agents, csvColumns, utilityFunction, prompts);
     const config = scenario
       ? {
           name: scenarioName,
           description: scenarioDesc,
           isPublic: scenario.isPublic,
           isTemplate: scenario.isTemplate,
-          domainAgents: scenario.domainAgents,
-          supervisors: scenario.supervisors,
-          turnPolicy: scenario.turnPolicy,
+          domainAgents: defaults.domainAgents,
+          supervisors: defaults.supervisors,
+          turnPolicy: defaults.turnPolicy,
           terminationConditions: scenario.terminationConditions,
-          outcomeSchema: scenario.outcomeSchema,
+          outcomeSchema: defaults.outcomeSchema,
         }
-      : { ...buildDefaultConfig(), name: scenarioName, description: scenarioDesc };
+      : { ...defaults, name: scenarioName, description: scenarioDesc };
 
     const saved = await saveScenario(config, currentId);
     setSaving(false);
@@ -1285,7 +1492,7 @@ export function ScenarioBuilder({ scenarioId, onUseInExperiment }: ScenarioBuild
       setLastSaved(new Date());
       dirty.current = false;
     }
-  }, [scenario, scenarioName, scenarioDesc, currentId]);
+  }, [scenario, scenarioName, scenarioDesc, currentId, agents, csvColumns, utilityFunction, prompts]);
 
   // Auto-save: debounce 3s after last change
   const scheduleAutoSave = useCallback(() => {
@@ -1305,11 +1512,13 @@ export function ScenarioBuilder({ scenarioId, onUseInExperiment }: ScenarioBuild
     scheduleAutoSave();
   }, [scheduleAutoSave]);
 
+  void handleDescChange; // used via doSave deps only
+
   const handleDuplicate = useCallback(async () => {
     if (!currentId) {
-      // Save first, then clone
+      const defaults = buildDefaultConfig(agents, csvColumns, utilityFunction, prompts);
       const saved = await saveScenario(
-        { ...buildDefaultConfig(), name: scenarioName, description: scenarioDesc },
+        { ...defaults, name: scenarioName, description: scenarioDesc },
       );
       if (!saved) return;
       const cloned = await cloneScenario(saved.id);
@@ -1332,11 +1541,9 @@ export function ScenarioBuilder({ scenarioId, onUseInExperiment }: ScenarioBuild
       setCurrentId(cloned.id);
       setLastSaved(new Date());
     }
-  }, [currentId, scenarioName, scenarioDesc, doSave]);
+  }, [currentId, scenarioName, scenarioDesc, doSave, agents, csvColumns, utilityFunction, prompts]);
 
-  const agentCount = scenario
-    ? scenario.domainAgents.length + scenario.supervisors.length
-    : AGENTS.length;
+  const agentCount = agents.length;
 
   if (loading) {
     return (
@@ -1450,10 +1657,35 @@ export function ScenarioBuilder({ scenarioId, onUseInExperiment }: ScenarioBuild
 
       {/* Tab body */}
       <div style={{ padding: '16px 24px 32px' }}>
-        {tab === 'agents' && <AgentsPane />}
-        {tab === 'policy' && <PolicyPane />}
-        {tab === 'prompts' && <PromptsPane />}
-        {tab === 'outcomes' && <OutcomesPane />}
+        {tab === 'agents' && (
+          <AgentsPane
+            agents={agents}
+            onChange={setAgents}
+          />
+        )}
+        {tab === 'policy' && (
+          <PolicyPane
+            turnPolicyId={turnPolicyId}
+            stopConditions={stopConditions}
+            onPolicyChange={setTurnPolicyId}
+            onStopConditionsChange={setStopConditions}
+          />
+        )}
+        {tab === 'prompts' && (
+          <PromptsPane
+            agents={agents}
+            prompts={prompts}
+            onPromptsChange={setPrompts}
+          />
+        )}
+        {tab === 'outcomes' && (
+          <OutcomesPane
+            csvColumns={csvColumns}
+            utilityFunction={utilityFunction}
+            onCsvColumnsChange={setCsvColumns}
+            onUtilityFunctionChange={setUtilityFunction}
+          />
+        )}
       </div>
     </div>
   );
