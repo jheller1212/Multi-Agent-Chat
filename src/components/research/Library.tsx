@@ -561,29 +561,6 @@ export function Library({ onEditScenario, onCloneScenario, onNewScenario, onView
               </button>
             ))}
 
-            {/* Vertical divider */}
-            <span
-              style={{
-                width: 1, height: 20,
-                background: 'var(--line-1)',
-                margin: '0 4px',
-              }}
-            />
-
-            <button
-              className="r-btn r-btn-ghost r-btn-sm"
-              title="Coming soon"
-              style={{ opacity: 0.5, cursor: 'not-allowed' }}
-            >
-              <Icon name="filter" size={13} /> More filters
-            </button>
-            <button
-              className="r-btn r-btn-ghost r-btn-sm"
-              title="Coming soon"
-              style={{ opacity: 0.5, cursor: 'not-allowed' }}
-            >
-              <Icon name="sortAsc" size={13} /> Most used
-            </button>
           </div>
         </div>
       </div>

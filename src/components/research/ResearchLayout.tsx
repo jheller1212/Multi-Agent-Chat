@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { clearVault } from '../../lib/apiKeyVault';
+import { clearVault, loadVault, saveVault, type ProviderVault } from '../../lib/apiKeyVault';
 import { cloneScenario, saveScenario } from '../../lib/scenario/loader';
 import { exportRunCSV, downloadCSV } from '../../lib/outcomes/csv-export';
 import { ResearchShell } from './ResearchShell';
@@ -43,9 +43,104 @@ interface ResearchLayoutProps {
   onBack: () => void;
 }
 
+const PROVIDER_FIELDS: Array<{
+  key: keyof ProviderVault;
+  label: string;
+  color: string;
+  placeholder: string;
+}> = [
+  { key: 'gpt4',    label: 'OpenAI',   color: '#10A37F', placeholder: 'sk-...' },
+  { key: 'claude',  label: 'Anthropic', color: '#D97757', placeholder: 'sk-ant-...' },
+  { key: 'gemini',  label: 'Google (Gemini)', color: '#4285F4', placeholder: 'AIza...' },
+  { key: 'mistral', label: 'Mistral',  color: '#FA520F', placeholder: 'xxxxxxxx...' },
+  { key: 'meta',    label: 'Meta',     color: '#0064E0', placeholder: 'llama-api-...' },
+  { key: 'alibaba', label: 'Alibaba',  color: '#FF6A00', placeholder: 'sk-...' },
+];
+
+function ApiKeyRow({
+  fieldKey, label, color, placeholder, value, onChange,
+}: {
+  fieldKey: keyof ProviderVault;
+  label: string;
+  color: string;
+  placeholder: string;
+  value: string;
+  onChange: (key: keyof ProviderVault, val: string) => void;
+}) {
+  const [show, setShow] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const handleSave = () => {
+    onChange(fieldKey, value);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span
+          style={{
+            width: 8, height: 8, borderRadius: '50%',
+            background: color, display: 'inline-block', flexShrink: 0,
+          }}
+        />
+        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)', fontFamily: 'var(--font-h)' }}>
+          {label}
+        </span>
+      </div>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <div style={{ position: 'relative', flex: 1 }}>
+          <input
+            type={show ? 'text' : 'password'}
+            placeholder={placeholder}
+            value={value}
+            onChange={e => onChange(fieldKey, e.target.value)}
+            style={{
+              width: '100%', padding: '7px 36px 7px 10px', borderRadius: 6,
+              border: '1px solid var(--line-2)', background: 'var(--surface-panel)',
+              color: 'var(--text-1)', fontSize: 12.5, fontFamily: 'var(--font-mono)',
+              boxSizing: 'border-box',
+            }}
+          />
+          <button
+            onClick={() => setShow(s => !s)}
+            title={show ? 'Hide' : 'Show'}
+            style={{
+              position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
+              background: 'transparent', border: 0, cursor: 'pointer',
+              color: show ? 'var(--accent-2)' : 'var(--text-3)', padding: 2, lineHeight: 1,
+            }}
+          >
+            <Icon name="eye" size={14} />
+          </button>
+        </div>
+        <button
+          className="r-btn r-btn-secondary r-btn-sm"
+          onClick={handleSave}
+          style={saved ? { borderColor: '#22c55e', color: '#22c55e' } : undefined}
+        >
+          {saved ? 'Saved' : 'Save'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function SettingsScreen({ onSignOut }: { onSignOut: () => void }) {
   const [newPassword, setNewPassword] = useState('');
   const [message, setMessage] = useState('');
+  const [vault, setVault] = useState<ProviderVault>(() => loadVault());
+
+  useEffect(() => {
+    setVault(loadVault());
+  }, []);
+
+  const handleKeyChange = (key: keyof ProviderVault, val: string) => {
+    const updated = { ...vault, [key]: val };
+    setVault(updated);
+    saveVault(updated);
+  };
 
   const handlePasswordChange = async () => {
     if (!newPassword || newPassword.length < 6) {
@@ -58,7 +153,6 @@ function SettingsScreen({ onSignOut }: { onSignOut: () => void }) {
     } else {
       setMessage('Password updated successfully.');
       setNewPassword('');
-      setCurrentPassword('');
     }
   };
 
@@ -69,6 +163,31 @@ function SettingsScreen({ onSignOut }: { onSignOut: () => void }) {
         <p className="r-page-sub">Manage your account and preferences.</p>
       </div>
       <div className="r-page-body" style={{ maxWidth: 560 }}>
+
+        {/* API Keys */}
+        <div className="r-card" style={{ marginBottom: 16 }}>
+          <h3 style={{ fontFamily: 'var(--font-h)', fontSize: 15, fontWeight: 700, marginBottom: 4 }}>
+            Provider API Keys
+          </h3>
+          <p style={{ fontSize: 12, color: 'var(--text-3)', margin: '0 0 16px' }}>
+            Keys are stored encrypted in your browser and synced to Supabase. They are never sent to our servers.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {PROVIDER_FIELDS.map(f => (
+              <ApiKeyRow
+                key={f.key}
+                fieldKey={f.key}
+                label={f.label}
+                color={f.color}
+                placeholder={f.placeholder}
+                value={vault[f.key]}
+                onChange={handleKeyChange}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Change Password */}
         <div className="r-card" style={{ marginBottom: 16 }}>
           <h3 style={{ fontFamily: 'var(--font-h)', fontSize: 15, fontWeight: 700, marginBottom: 12 }}>
             Change Password

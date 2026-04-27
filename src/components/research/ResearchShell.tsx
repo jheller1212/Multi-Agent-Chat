@@ -118,14 +118,15 @@ function Topbar({ breadcrumb, onSignOut }: { breadcrumb: string[]; onSignOut?: (
 
       {/* Right actions */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <button
+        <a
+          href="https://github.com/jheller1212/Multi-Agent-Chat#readme"
+          target="_blank"
+          rel="noopener noreferrer"
           className="r-btn r-btn-ghost r-btn-sm"
-          style={{ gap: 6 }}
-          title="Coming soon"
-          onClick={() => { /* docs link not yet published */ }}
+          style={{ gap: 6, textDecoration: 'none' }}
         >
           <Icon name="help" size={14} /> Docs
-        </button>
+        </a>
         <button
           className="flex items-center justify-center cursor-pointer"
           style={{

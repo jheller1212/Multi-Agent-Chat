@@ -531,22 +531,6 @@ export function RunDashboard({ runId, onInspectDyad }: RunDashboardProps) {
                   Click Inspect to view dyad transcripts &middot; {cells.length} cells
                 </span>
               </div>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <button
-                  className="r-btn r-btn-ghost r-btn-sm"
-                  title="Coming soon"
-                  style={{ opacity: 0.5, cursor: 'not-allowed' }}
-                >
-                  <Icon name="filter" size={12} /> Filter
-                </button>
-                <button
-                  className="r-btn r-btn-ghost r-btn-sm"
-                  title="Coming soon"
-                  style={{ opacity: 0.5, cursor: 'not-allowed' }}
-                >
-                  <Icon name="grid" size={12} /> Matrix view
-                </button>
-              </div>
             </div>
             <div className="cell-table">
               <div className="cell-row cell-head">

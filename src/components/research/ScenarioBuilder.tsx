@@ -254,12 +254,14 @@ function AsideHeader({ icon, children, warn }: { icon: string; children: ReactNo
 
 interface AgentCardProps {
   a: Agent;
+  isEditing: boolean;
   onEdit: (id: string) => void;
   onCopy: (id: string) => void;
   onRemove: (id: string) => void;
+  onAgentChange: (updated: Agent) => void;
 }
 
-function AgentCard({ a, onEdit, onCopy, onRemove }: AgentCardProps) {
+function AgentCard({ a, isEditing, onEdit, onCopy, onRemove, onAgentChange }: AgentCardProps) {
   const avatarBg = a.color === 'blue' ? 'var(--accent-2-soft)'
     : a.color === 'orange' ? 'var(--accent-1-soft)'
     : 'var(--surface-sunken)';
@@ -274,10 +276,18 @@ function AgentCard({ a, onEdit, onCopy, onRemove }: AgentCardProps) {
     : a.id === 'judge' ? '84 tokens · 0 slots'
     : '146 tokens · 1 slot';
 
+  const inputStyle: React.CSSProperties = {
+    padding: '5px 8px', borderRadius: 5,
+    border: '1px solid var(--line-2)', background: 'var(--surface-sunken)',
+    color: 'var(--text-1)', fontSize: 12.5, fontFamily: 'var(--font-mono)',
+    width: '100%', boxSizing: 'border-box',
+  };
+
   return (
     <div
       style={{
-        background: 'var(--surface-panel)', border: '1px solid var(--line-1)',
+        background: 'var(--surface-panel)',
+        border: `1px solid ${isEditing ? 'var(--accent-2)' : 'var(--line-1)'}`,
         borderRadius: 8, padding: '14px 16px',
         display: 'flex', flexDirection: 'column', gap: 12,
       }}
@@ -308,7 +318,7 @@ function AgentCard({ a, onEdit, onCopy, onRemove }: AgentCardProps) {
         </div>
         <div style={{ display: 'flex', gap: 2 }}>
           {([
-            { icon: 'edit', title: 'Edit', action: () => onEdit(a.id) },
+            { icon: 'edit', title: isEditing ? 'Close' : 'Edit', action: () => onEdit(a.id) },
             { icon: 'copy', title: 'Duplicate', action: () => onCopy(a.id) },
             { icon: 'trash', title: 'Remove', action: () => onRemove(a.id) },
           ] as const).map(({ icon, title, action }) => (
@@ -318,8 +328,9 @@ function AgentCard({ a, onEdit, onCopy, onRemove }: AgentCardProps) {
               onClick={action}
               style={{
                 width: 32, height: 32, borderRadius: 6,
-                background: 'transparent', border: 0,
-                color: icon === 'trash' ? 'var(--accent-1)' : 'var(--text-2)',
+                background: icon === 'edit' && isEditing ? 'var(--accent-2-soft)' : 'transparent',
+                border: 0,
+                color: icon === 'trash' ? 'var(--accent-1)' : icon === 'edit' && isEditing ? 'var(--accent-2)' : 'var(--text-2)',
                 cursor: 'pointer',
                 display: 'grid', placeItems: 'center',
               }}
@@ -330,30 +341,94 @@ function AgentCard({ a, onEdit, onCopy, onRemove }: AgentCardProps) {
         </div>
       </div>
 
+      {/* Inline edit form */}
+      {isEditing && (
+        <div
+          style={{
+            display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10,
+            borderTop: '1px solid var(--line-1)', paddingTop: 12,
+          }}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <label style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-4)', fontWeight: 600 }}>Name</label>
+            <input style={inputStyle} value={a.name} onChange={e => onAgentChange({ ...a, name: e.target.value })} />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <label style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-4)', fontWeight: 600 }}>Provider</label>
+            <select
+              style={{ ...inputStyle, fontFamily: 'var(--font-app)' }}
+              value={a.provider}
+              onChange={e => {
+                const models = PROVIDERS[e.target.value]?.models ?? [];
+                onAgentChange({ ...a, provider: e.target.value, model: models[0] ?? a.model });
+              }}
+            >
+              {Object.keys(PROVIDERS).map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <label style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-4)', fontWeight: 600 }}>Model</label>
+            <select
+              style={{ ...inputStyle, fontFamily: 'var(--font-app)' }}
+              value={a.model}
+              onChange={e => onAgentChange({ ...a, model: e.target.value })}
+            >
+              {(PROVIDERS[a.provider]?.models ?? [a.model]).map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <label style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-4)', fontWeight: 600 }}>Temperature</label>
+            <input
+              type="number" step={0.1} min={0} max={2}
+              style={inputStyle} value={a.temp}
+              onChange={e => onAgentChange({ ...a, temp: parseFloat(e.target.value) || 0 })}
+            />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <label style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-4)', fontWeight: 600 }}>Max tokens</label>
+            <input
+              type="number" step={50} min={50}
+              style={inputStyle} value={a.max}
+              onChange={e => onAgentChange({ ...a, max: parseInt(e.target.value) || a.max })}
+            />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, gridColumn: '1 / -1' }}>
+            <label style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-4)', fontWeight: 600 }}>Description</label>
+            <textarea
+              style={{ ...inputStyle, resize: 'vertical', minHeight: 56, fontFamily: 'var(--font-app)', lineHeight: 1.5 }}
+              value={a.desc}
+              onChange={e => onAgentChange({ ...a, desc: e.target.value })}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Spec strip */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1.3fr 0.7fr 0.7fr 1.2fr',
-          gap: 0,
-          borderTop: '1px solid var(--line-1)',
-          paddingTop: 12,
-        }}
-      >
-        <SpecCell label="Provider" first>
-          <span
-            style={{
-              width: 8, height: 8, borderRadius: '50%',
-              display: 'inline-block', background: providerColor,
-            }}
-          />
-          {a.provider}
-        </SpecCell>
-        <SpecCell label="Model" mono>{a.model}</SpecCell>
-        <SpecCell label="Temperature" mono>{a.temp.toFixed(2)}</SpecCell>
-        <SpecCell label="Max tokens" mono>{a.max}</SpecCell>
-        <SpecCell label="System prompt" last>{promptInfo}</SpecCell>
-      </div>
+      {!isEditing && (
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1.3fr 0.7fr 0.7fr 1.2fr',
+            gap: 0,
+            borderTop: '1px solid var(--line-1)',
+            paddingTop: 12,
+          }}
+        >
+          <SpecCell label="Provider" first>
+            <span
+              style={{
+                width: 8, height: 8, borderRadius: '50%',
+                display: 'inline-block', background: providerColor,
+              }}
+            />
+            {a.provider}
+          </SpecCell>
+          <SpecCell label="Model" mono>{a.model}</SpecCell>
+          <SpecCell label="Temperature" mono>{a.temp.toFixed(2)}</SpecCell>
+          <SpecCell label="Max tokens" mono>{a.max}</SpecCell>
+          <SpecCell label="System prompt" last>{promptInfo}</SpecCell>
+        </div>
+      )}
     </div>
   );
 }
@@ -578,6 +653,8 @@ interface AgentsPaneProps {
 }
 
 function AgentsPane({ agents, onChange }: AgentsPaneProps) {
+  const [editingAgentId, setEditingAgentId] = useState<string | null>(null);
+
   const addAgent = (role: 'domain' | 'supervisor') => {
     const id = `agent-${Date.now()}`;
     const newAgent: Agent = {
@@ -595,7 +672,7 @@ function AgentsPane({ agents, onChange }: AgentsPaneProps) {
   };
 
   const handleEdit = (id: string) => {
-    console.log('Edit agent:', id);
+    setEditingAgentId(prev => (prev === id ? null : id));
   };
 
   const handleCopy = (id: string) => {
@@ -633,9 +710,11 @@ function AgentsPane({ agents, onChange }: AgentsPaneProps) {
             <AgentCard
               key={a.id}
               a={a}
+              isEditing={editingAgentId === a.id}
               onEdit={handleEdit}
               onCopy={handleCopy}
               onRemove={handleRemove}
+              onAgentChange={(updated) => onChange(agents.map(x => x.id === updated.id ? updated : x))}
             />
           ))}
         </div>
@@ -922,8 +1001,9 @@ function PromptsPane({ agents, prompts, onPromptsChange }: PromptsPaneProps) {
   };
 
   const handleDuplicate = () => {
-    const label = agents.find(a => a.id === effectiveAgentId)?.name ?? effectiveAgentId;
-    alert(`Prompt for "${label}" duplicated. (Not yet persisted — coming soon.)`);
+    const currentText = prompts[effectiveAgentId] ?? '';
+    const copyKey = `${effectiveAgentId}_copy_${Date.now()}`;
+    onPromptsChange({ ...prompts, [copyKey]: currentText });
   };
 
   const addSlot = () => {
@@ -1376,8 +1456,6 @@ export function ScenarioBuilder({ scenarioId, onUseInExperiment }: ScenarioBuild
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [lastSavedLabel, setLastSavedLabel] = useState<string>('');
-  const [showExperimentMsg, setShowExperimentMsg] = useState(false);
-
   // Lifted sub-pane state
   const [agents, setAgents] = useState<Agent[]>(DEFAULT_AGENTS);
   const [turnPolicyId, setTurnPolicyId] = useState('strict');
@@ -1609,11 +1687,10 @@ export function ScenarioBuilder({ scenarioId, onUseInExperiment }: ScenarioBuild
             </button>
             <button
               className="r-btn r-btn-primary"
+              disabled={!onUseInExperiment || !currentId}
               onClick={() => {
                 if (onUseInExperiment && currentId) {
                   onUseInExperiment(currentId);
-                } else {
-                  setShowExperimentMsg(true);
                 }
               }}
             >
@@ -1621,35 +1698,6 @@ export function ScenarioBuilder({ scenarioId, onUseInExperiment }: ScenarioBuild
             </button>
           </div>
         </div>
-
-        {/* Experiment placeholder message */}
-        {showExperimentMsg && (
-          <div
-            style={{
-              margin: '12px 0 0',
-              padding: '10px 14px',
-              background: 'var(--accent-2-soft)',
-              borderRadius: 8,
-              fontSize: 13,
-              color: 'var(--accent-2)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-            }}
-          >
-            <Icon name="flask" size={14} />
-            Experiment integration coming soon. This scenario will be available in the Experiments tab.
-            <button
-              onClick={() => setShowExperimentMsg(false)}
-              style={{
-                marginLeft: 'auto', background: 'transparent', border: 0,
-                color: 'var(--accent-2)', cursor: 'pointer', padding: '2px 6px',
-              }}
-            >
-              <Icon name="close" size={12} />
-            </button>
-          </div>
-        )}
 
         {/* Tab bar */}
         <TabBar tabs={TABS} current={tab} onChange={setTab} />

@@ -396,8 +396,10 @@ export class ExperimentRunner {
           return {
             afterTurn: transcript.length,
             supervisorName: supervisorDef.name,
-            outputType: supervisorDef.type === 'classifier' ? 'classification' : 'extraction',
-            parsed: supervisorDef.type === 'classifier'
+            outputType: supervisorDef.type === 'classifier' || supervisorDef.type === 'appraiser'
+              ? 'classification'
+              : 'extraction',
+            parsed: supervisorDef.type === 'classifier' || supervisorDef.type === 'appraiser'
               ? { classification: 'CONTINUE' }
               : {},
             rawResponse: '[devMode: skipped]',
@@ -533,14 +535,27 @@ export class ExperimentRunner {
       let temperature = 0.7;
 
       if (assignment) {
-        // Find the factor mapping that matches the cell's factor values
-        for (const [factorName, mapping] of Object.entries(assignment.factorMappings)) {
-          const factorValue = cellFactors[factorName];
-          if (factorValue !== undefined) {
-            provider = mapping.provider;
-            model = mapping.model;
-            temperature = mapping.temperature;
-            break;
+        // factorMappings keys are "factorName=level" (e.g., "buyer_capability=strong").
+        // Find the first key whose factor name + level matches this cell's factor values.
+        for (const [key, mapping] of Object.entries(assignment.factorMappings)) {
+          const eqIdx = key.indexOf('=');
+          if (eqIdx === -1) {
+            // Legacy: treat key as a plain factor name
+            if (cellFactors[key] !== undefined) {
+              provider = mapping.provider;
+              model = mapping.model;
+              temperature = mapping.temperature;
+              break;
+            }
+          } else {
+            const factorName = key.slice(0, eqIdx);
+            const factorLevel = key.slice(eqIdx + 1);
+            if (cellFactors[factorName] === factorLevel) {
+              provider = mapping.provider;
+              model = mapping.model;
+              temperature = mapping.temperature;
+              break;
+            }
           }
         }
       }
