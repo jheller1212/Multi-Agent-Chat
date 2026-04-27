@@ -493,7 +493,8 @@ export class ExperimentRunner {
     if (Object.keys(mergedOutcome).length > 0) {
       await supabase.from('outcome_records').insert({
         dyad_id: dyadId,
-        outcomes: mergedOutcome,
+        run_id: this.runId!,
+        data: mergedOutcome,
       });
     }
 

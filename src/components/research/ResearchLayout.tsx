@@ -117,11 +117,11 @@ function SettingsScreen({ onSignOut }: { onSignOut: () => void }) {
 
 interface RunRow {
   id: string;
-  name: string | null;
   status: string | null;
-  created_at: string | null;
-  total_dyads: number | null;
-  completed_dyads: number | null;
+  config_snapshot: Record<string, unknown> | null;
+  progress: { total?: number; completed?: number } | null;
+  started_at: string | null;
+  completed_at: string | null;
 }
 
 function ResultsScreen() {
@@ -132,10 +132,10 @@ function ResultsScreen() {
   useEffect(() => {
     void (async () => {
       const { data } = await supabase
-        .from('runs')
-        .select('id, name, status, created_at, total_dyads, completed_dyads')
+        .from('experiment_runs')
+        .select('id, status, config_snapshot, progress, started_at, completed_at')
         .eq('status', 'completed')
-        .order('created_at', { ascending: false })
+        .order('started_at', { ascending: false })
         .limit(50);
       setRuns((data ?? []) as RunRow[]);
       setLoading(false);
@@ -176,16 +176,16 @@ function ResultsScreen() {
               >
                 <div>
                   <div style={{ fontFamily: 'var(--font-h)', fontSize: 14, fontWeight: 700, color: 'var(--text-1)' }}>
-                    {run.name ?? run.id.slice(0, 8)}
+                    Run {run.id.slice(0, 8)}
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
-                    {run.completed_dyads ?? 0} / {run.total_dyads ?? '?'} dyads &middot;{' '}
-                    {run.created_at ? new Date(run.created_at).toLocaleDateString() : '—'}
+                    {run.progress?.completed ?? 0} / {run.progress?.total ?? '?'} dyads &middot;{' '}
+                    {run.started_at ? new Date(run.started_at).toLocaleDateString() : '—'}
                   </div>
                 </div>
                 <button
                   className="r-btn r-btn-secondary r-btn-sm"
-                  onClick={() => void handleDownload(run.id, run.name)}
+                  onClick={() => void handleDownload(run.id, `run-${run.id.slice(0, 8)}`)}
                   disabled={downloading === run.id}
                 >
                   <Icon name="download" size={13} />
@@ -223,8 +223,9 @@ function QuickChatScreen({ onBack }: { onBack: () => void }) {
 interface ConversationRow {
   id: string;
   created_at: string | null;
-  scenario_title: string | null;
-  message_count: number | null;
+  title: string | null;
+  model1_type: string | null;
+  model2_type: string | null;
 }
 
 function HistoryScreen() {
@@ -235,7 +236,7 @@ function HistoryScreen() {
     void (async () => {
       const { data } = await supabase
         .from('conversations')
-        .select('id, created_at, scenario_title, message_count')
+        .select('id, created_at, title, model1_type, model2_type')
         .order('created_at', { ascending: false })
         .limit(50);
       setRows((data ?? []) as ConversationRow[]);
@@ -270,10 +271,10 @@ function HistoryScreen() {
               >
                 <div>
                   <div style={{ fontFamily: 'var(--font-h)', fontSize: 13, fontWeight: 700, color: 'var(--text-1)' }}>
-                    {row.scenario_title ?? 'Untitled conversation'}
+                    {row.title ?? 'Untitled conversation'}
                   </div>
                   <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 2 }}>
-                    {row.message_count ?? '?'} messages &middot;{' '}
+                    {row.model1_type ?? ''} × {row.model2_type ?? ''} &middot;{' '}
                     {row.created_at ? new Date(row.created_at).toLocaleString() : '—'}
                   </div>
                 </div>

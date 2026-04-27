@@ -19,7 +19,7 @@ export async function exportRunCSV(runId: string): Promise<string> {
 
   const { data, error } = await supabase
     .from('outcome_records')
-    .select('dyad_id, outcomes')
+    .select('dyad_id, data')
     .in('dyad_id', dyadIds)
     .order('created_at', { ascending: true });
 
@@ -28,12 +28,12 @@ export async function exportRunCSV(runId: string): Promise<string> {
   }
 
   // Get column headers from the first record
-  const firstOutcomes = data[0].outcomes as Record<string, unknown>;
+  const firstOutcomes = data[0].data as Record<string, unknown>;
   const outcomeHeaders = Object.keys(firstOutcomes);
   const headers = ['dyad_id', ...outcomeHeaders];
 
   const rows = data.map(row => {
-    const outcomes = row.outcomes as Record<string, unknown>;
+    const outcomes = row.data as Record<string, unknown>;
     return [row.dyad_id as string, ...outcomeHeaders.map(h => {
       const val = outcomes[h];
       if (val === null || val === undefined) return '';
