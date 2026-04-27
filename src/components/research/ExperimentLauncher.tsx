@@ -55,20 +55,50 @@ export function ExperimentLauncher({ scenarioId, scenarioName, onLaunch, onBack 
   const [launchError, setLaunchError] = useState<string | null>(null);
   const runnerRef = useRef<ExperimentRunner | null>(null);
 
+  // Model selection
+  const [selectedProvider, setSelectedProvider] = useState<string>('openai');
+  const [selectedModel, setSelectedModel] = useState<string>('gpt-4o');
+
+  const MODEL_OPTIONS: Record<string, Array<{ id: string; label: string }>> = {
+    openai: [{ id: 'gpt-4o', label: 'GPT-4o' }, { id: 'gpt-4o-mini', label: 'GPT-4o Mini' }, { id: 'gpt-4.1', label: 'GPT-4.1' }],
+    anthropic: [{ id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' }, { id: 'claude-opus-4-6', label: 'Claude Opus 4.6' }, { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' }],
+    google: [{ id: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro' }, { id: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash' }],
+    mistral: [{ id: 'mistral-large-latest', label: 'Mistral Large' }, { id: 'mistral-small-latest', label: 'Mistral Small' }],
+    meta: [{ id: 'llama-3.1-8b-instruct', label: 'Llama 3.1 8B' }, { id: 'llama-3.1-70b-instruct', label: 'Llama 3.1 70B' }],
+    alibaba: [{ id: 'qwen-2.5-7b-instruct', label: 'Qwen 2.5 7B' }, { id: 'qwen-2.5-72b-instruct', label: 'Qwen 2.5 72B' }],
+  };
+
   // API key management
   const [vault, setVault] = useState<ProviderVault>(() => loadVault());
   const [showKeyInput, setShowKeyInput] = useState(false);
   const [keyInput, setKeyInput] = useState('');
-  const hasOpenAIKey = vault.gpt4.length > 0;
+  const [keyProvider, setKeyProvider] = useState<keyof ProviderVault>('gpt4');
+
+  const VAULT_KEY_MAP: Record<string, keyof ProviderVault> = {
+    openai: 'gpt4', anthropic: 'claude', google: 'gemini', mistral: 'mistral', meta: 'meta', alibaba: 'alibaba',
+  };
+
+  const hasKeyForProvider = vault[VAULT_KEY_MAP[selectedProvider] ?? 'gpt4'].length > 0;
   const hasAnyKey = Object.values(vault).some(k => k.length > 0);
+  const configuredProviders = PROVIDER_OPTIONS.filter(p => vault[VAULT_KEY_MAP[p.value] ?? 'gpt4'].length > 0);
 
   useEffect(() => { setVault(loadVault()); }, []);
 
+  // When provider changes, pick first model and check key
+  useEffect(() => {
+    const models = MODEL_OPTIONS[selectedProvider];
+    if (models && models.length > 0) {
+      setSelectedModel(models[0].id);
+    }
+    setKeyProvider(VAULT_KEY_MAP[selectedProvider] ?? 'gpt4');
+  }, [selectedProvider]);
+
   const handleSaveKey = () => {
-    const updated = { ...vault, gpt4: keyInput };
+    const updated = { ...vault, [keyProvider]: keyInput };
     setVault(updated);
     saveVault(updated);
     setShowKeyInput(false);
+    setKeyInput('');
   };
 
   const cellCount = factors.reduce((acc, f) => acc * f.levels.length, 1);
@@ -142,14 +172,15 @@ export function ExperimentLauncher({ scenarioId, scenarioName, onLaunch, onBack 
         return;
       }
 
-      // Build agent assignments from scenario domain agents (default: openai / gpt-4o)
-      const defaultProvider: ProviderType = 'openai';
+      // Build agent assignments using the selected provider/model
+      const chosenProvider = selectedProvider as ProviderType;
+      const chosenModel = selectedModel;
       const agentAssignments = scenario.domainAgents.map(agent => ({
         agentName: agent.name,
         factorMappings: factors.reduce<Record<string, { provider: ProviderType; model: string; temperature: number }>>(
           (acc, factor) => {
             factor.levels.forEach(level => {
-              acc[`${factor.name}=${level}`] = { provider: defaultProvider, model: 'gpt-4o', temperature: 0.7 };
+              acc[`${factor.name}=${level}`] = { provider: chosenProvider, model: chosenModel, temperature: 0.7 };
             });
             return acc;
           },
@@ -314,6 +345,61 @@ export function ExperimentLauncher({ scenarioId, scenarioName, onLaunch, onBack 
           </div>
         </div>
 
+        {/* Model Selection */}
+        <div className="r-card" style={{ marginBottom: 16 }}>
+          <h3 style={{ fontFamily: 'var(--font-h)', fontSize: 15, fontWeight: 700, marginBottom: 4 }}>
+            Model
+          </h3>
+          <p style={{ fontSize: 12, color: 'var(--text-3)', margin: '0 0 12px' }}>
+            Which LLM provider and model should agents use? All domain agents in this experiment will use the same model.
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 6 }}>
+                Provider
+              </label>
+              <select
+                value={selectedProvider}
+                onChange={e => setSelectedProvider(e.target.value)}
+                style={{
+                  width: '100%', padding: '8px 12px', borderRadius: 6,
+                  border: '1px solid var(--line-2)', background: 'var(--surface-panel)',
+                  color: 'var(--text-1)', fontSize: 13, fontFamily: 'var(--font-ui)',
+                }}
+              >
+                {PROVIDER_OPTIONS.map(p => (
+                  <option key={p.value} value={p.value}>
+                    {p.label} {vault[VAULT_KEY_MAP[p.value] ?? 'gpt4'].length > 0 ? '✓' : '(no key)'}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 6 }}>
+                Model
+              </label>
+              <select
+                value={selectedModel}
+                onChange={e => setSelectedModel(e.target.value)}
+                style={{
+                  width: '100%', padding: '8px 12px', borderRadius: 6,
+                  border: '1px solid var(--line-2)', background: 'var(--surface-panel)',
+                  color: 'var(--text-1)', fontSize: 13, fontFamily: 'var(--font-mono)',
+                }}
+              >
+                {(MODEL_OPTIONS[selectedProvider] ?? []).map(m => (
+                  <option key={m.id} value={m.id}>{m.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          {!hasKeyForProvider && (
+            <p style={{ fontSize: 11.5, color: 'var(--accent-1)', marginTop: 8 }}>
+              No API key for {PROVIDER_OPTIONS.find(p => p.value === selectedProvider)?.label}. Add one in the checklist below or go to Settings.
+            </p>
+          )}
+        </div>
+
         {/* Settings */}
         <div className="r-card" style={{ marginBottom: 16 }}>
           <h3 style={{ fontFamily: 'var(--font-h)', fontSize: 15, fontWeight: 700, marginBottom: 12 }}>
@@ -386,7 +472,7 @@ export function ExperimentLauncher({ scenarioId, scenarioName, onLaunch, onBack 
           const checks: Array<{ label: string; ok: boolean; detail: string; tooltip: string; action?: () => void; actionLabel?: string }> = [
             { label: 'Experiment name', ok: hasName, detail: hasName ? name : 'Enter a name above', tooltip: 'Give your experiment a descriptive name so you can identify it later in the Results tab. E.g., "Capability asymmetry — pilot run".' },
             { label: 'Scenario selected', ok: hasScenario, detail: hasScenario ? `ID: ${scenarioId?.slice(0, 8)}...` : 'Go back and select a scenario first', tooltip: 'A scenario defines the agents, prompts, turn-taking policy, and outcome schema. Clone one from the Library or create a blank scenario first.' },
-            { label: 'API key configured', ok: hasAnyKey, detail: hasAnyKey ? `OpenAI key (${vault.gpt4.slice(0, 7)}...)` : 'No provider keys found', tooltip: 'You need at least one LLM provider API key (e.g., OpenAI, Anthropic). The key is stored encrypted in your browser and used to make calls to the provider\'s API. Get one at platform.openai.com/api-keys.', action: () => setShowKeyInput(true), actionLabel: 'Add key' },
+            { label: 'API key for selected provider', ok: hasKeyForProvider, detail: hasKeyForProvider ? `${PROVIDER_OPTIONS.find(p => p.value === selectedProvider)?.label} key configured` : `No key for ${PROVIDER_OPTIONS.find(p => p.value === selectedProvider)?.label ?? selectedProvider}${hasAnyKey ? ` (you have keys for: ${configuredProviders.map(p => p.label).join(', ')})` : ''}`, tooltip: 'You need an API key for the provider you selected above. The key is stored encrypted in your browser. Get one from the provider\'s developer console (e.g., platform.openai.com/api-keys for OpenAI, console.anthropic.com for Anthropic).', action: () => setShowKeyInput(true), actionLabel: 'Add key' },
             { label: 'Factors defined', ok: hasFactors, detail: hasFactors ? `${factors.length} factor(s), ${cellCount} cells` : 'Each factor needs at least 2 levels', tooltip: 'Factors are the independent variables in your experiment. Each factor has levels (e.g., "capability: strong, weak"). The platform cross-joins all factors to create cells. Each cell gets N dyads.' },
             { label: 'N per cell', ok: nReasonable, detail: nReasonable ? `${nPerCell} dyads × ${cellCount} cells = ${totalDyads} total` : 'Must be between 1 and 500', tooltip: 'How many agent-to-agent conversations to run per experimental cell. Higher N = more statistical power but more API cost. Start with 2–4 for testing, 50–150 for production.' },
             { label: 'Concurrency', ok: concurrencyOk, detail: concurrencyOk ? `${concurrency} parallel dyads` : 'Must be between 1 and 20', tooltip: 'How many dyads run simultaneously. Higher = faster but more API rate-limit risk. 5 is a safe default. Reduce to 1–2 if you hit rate limits.' },
@@ -458,8 +544,8 @@ export function ExperimentLauncher({ scenarioId, scenarioName, onLaunch, onBack 
                   background: 'var(--surface-sunken)', border: '1px solid var(--line-1)',
                 }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 6 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10A37F' }} />
-                    OpenAI API Key
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: PROVIDER_OPTIONS.find(p => p.value === selectedProvider)?.dot ?? '#999' }} />
+                    {PROVIDER_OPTIONS.find(p => p.value === selectedProvider)?.label ?? selectedProvider} API Key
                   </label>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <input
