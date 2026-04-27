@@ -252,11 +252,12 @@ function formatTime(iso: string | null): string {
 export interface RunDashboardProps {
   experimentId?: string;
   onInspectDyad?: (dyadId: string) => void;
+  onDuplicate?: () => void;
 }
 
 const POLL_INTERVAL_MS = 5000;
 
-export function RunDashboard({ experimentId, onInspectDyad }: RunDashboardProps) {
+export function RunDashboard({ experimentId, onInspectDyad, onDuplicate }: RunDashboardProps) {
   const [experiment, setExperiment] = useState<ExperimentRow | null>(null);
   const [dyads, setDyads] = useState<DyadRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -439,6 +440,15 @@ export function RunDashboard({ experimentId, onInspectDyad }: RunDashboardProps)
               >
                 <Icon name="download" size={13} /> {csvExporting ? 'Exporting...' : 'Snapshot CSV'}
               </button>
+              {onDuplicate && (
+                <button
+                  className="r-btn r-btn-ghost"
+                  onClick={onDuplicate}
+                  title="Duplicate experiment config as a new draft"
+                >
+                  <Icon name="copy" size={13} /> Duplicate
+                </button>
+              )}
             </div>
             {actionError && (
               <span style={{ fontSize: 11, color: 'var(--accent-1)' }}>{actionError}</span>

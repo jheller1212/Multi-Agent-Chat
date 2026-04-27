@@ -61,7 +61,7 @@ export interface ExperimentRun {
 
 export interface DyadRecord {
   id: string;
-  runId: string;
+  experimentId: string;
   cellLabel: string;
   dyadIndex: number;
   seed: number;

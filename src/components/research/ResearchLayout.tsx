@@ -537,6 +537,7 @@ export function ResearchLayout({ onBack }: ResearchLayoutProps) {
         <RunDashboard
           experimentId={selectedExperimentId ?? undefined}
           onInspectDyad={(dyadId: string) => { setSelectedDyadId(dyadId); setScreen('transcript'); }}
+          onDuplicate={selectedExperimentId ? () => { void handleDuplicateExperiment(selectedExperimentId); } : undefined}
         />
       )}
       {screen === 'results' && <ResultsScreen />}

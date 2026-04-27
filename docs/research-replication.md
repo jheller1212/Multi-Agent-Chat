@@ -143,4 +143,4 @@ The script produces the tables and figures reported in the paper. See `analysis/
 
 ## Verifying replication
 
-The frozen prompt hashes recorded on each dyad row (`frozen_prompts` table, linked via `experiment_runs`) allow exact verification that the prompts used match the paper. Export the `frozen_prompts` rows and compare SHA-256 hashes against the values published in the paper's supplementary materials.
+The frozen prompt hashes recorded on each dyad (`frozen_prompts` table, linked via `experiment_id`) allow exact verification that the prompts used match the paper. Export the `frozen_prompts` rows and compare SHA-256 hashes against the values published in the paper's supplementary materials.

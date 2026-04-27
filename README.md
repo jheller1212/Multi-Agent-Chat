@@ -4,29 +4,24 @@
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Netlify](https://img.shields.io/badge/deployed-Netlify-00C7B7)](https://multi-agent-chat-research.netlify.app)
 
-A browser-first platform for designing and running multi-agent LLM experiments. Built by [DEXLab](https://dexlab.maastrichtuniversity.nl) at Maastricht University.
+A browser-first platform for designing and running multi-agent LLM experiments. Built by [DEXLab](https://www.sbe-dexlab.com) at Maastricht University, School of Business and Economics.
 
-Researchers configure scenarios, design factorial experiments, and launch runs — entirely from the browser, without writing code. Results export as structured CSVs ready for statistical analysis.
-
----
-
-## Screenshots
-
-**Library** — Browse and clone pre-built scenario templates (Procurement Negotiation, Legal Advocacy, Mediation).
-
-**Run Dashboard** — Monitor experiment progress per cell in real time, pause/resume/abort runs, and inspect live transcripts.
+Researchers configure scenarios, design factorial experiments, and launch experiments — entirely from the browser, without writing code. Results export as structured CSVs ready for statistical analysis.
 
 ---
 
 ## Features
 
-- **3 pre-built scenarios** — Procurement Negotiation, Legal Advocacy, Mediation; each ships with domain agents, supervisors, and turn policies
-- **6 LLM providers** — OpenAI, Anthropic, Google, Mistral, Meta (Llama), Alibaba (Qwen); configure per agent, per experiment cell
-- **Factorial experiment design** — define factors and levels, assign models per cell, set N per cell; the platform cross-joins everything automatically
-- **Live run monitoring** — real-time progress dashboard via Supabase subscriptions; click any dyad to watch its transcript live
-- **Structured CSV export** — outcome records match a researcher-defined schema; drop into R or Python without post-processing
-- **Prompt template system** — Markdown templates with `{SLOT}` substitution and `[BLOCK]...[/BLOCK]` conditionals; slot autocomplete in the browser editor
-- **Freeze mechanism** — at launch, all prompts are rendered, hashed (SHA-256), and stored immutably; every dyad records the exact prompt used, guaranteeing replication
+- **3 pre-built scenarios** — Procurement Negotiation (2 agents), Legal Advocacy (3 agents), Mediation (3 agents)
+- **6 LLM providers** — OpenAI, Anthropic, Google, Mistral, Meta (Llama), Alibaba (Qwen)
+- **Factorial experiment design** — define factors and levels, pick provider/model, set N per cell
+- **Pre-launch checklist** — validates agents, API keys, factors, and settings before launch with tooltips
+- **Live experiment monitoring** — real-time progress dashboard; click any cell to inspect transcripts
+- **Structured CSV export** — outcome records match a researcher-defined schema
+- **Prompt template system** — `{SLOT}` substitution with live preview in the browser editor
+- **Prompt freeze** — at launch, all prompts are hashed (SHA-256) and stored immutably for reproducibility
+- **Interactive onboarding tour** — 7-step guided walkthrough for new users
+- **Dark mode** — full dark theme support across all screens
 
 ---
 
@@ -38,7 +33,7 @@ cd Multi-Agent-Chat
 npm install
 ```
 
-Create a `.env` file in the project root:
+Create a `.env` file:
 
 ```env
 VITE_SUPABASE_URL=your_supabase_project_url
@@ -49,58 +44,66 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 npm run dev
 ```
 
-Visit `http://localhost:5173`. Sign in, navigate to **Research > Library**, and clone a scenario to start.
+Visit `http://localhost:5173`. Sign in, go to **Settings** to enter an API key, then **Library** to clone a scenario and launch your first experiment.
 
 ---
 
-## Architecture Overview
+## Data Model
 
-### Agents
+```
+Scenario (template — defines agents, prompts, turn policy)
+  └── Experiment (design + execution — factors, N per cell, model, data)
+       └── Dyads (individual conversations)
+            ├── Transcript messages
+            ├── Supervisor outputs
+            └── Outcome record
+```
+
+No separate "runs" layer — an experiment IS the execution unit.
+
+---
+
+## Scenarios
+
+Each scenario ships with domain agents, one supervisor, and a turn policy. Clone and customise in the browser.
+
+| Scenario | Domain Agents | Supervisor | Turn Policy | Turns |
+|----------|--------------|------------|-------------|-------|
+| Procurement Negotiation | Buyer, Seller | Judge (accept/reject/continue) | Alternating | 20 |
+| Legal Advocacy | Plaintiff, Defense, Judge | Verdict classifier | Structured sequence | 20 |
+| Mediation | Landlord, Tenant, Mediator | Agreement checker | Mediator-led | 20 |
+
+---
+
+## Architecture
+
+### Agents (`src/lib/agents/`)
 
 | Class | Role |
 |-------|------|
-| `BaseAgent` | Shared retry logic, provider calls, token tracking (`src/lib/agents/agent.ts`) |
-| `DomainAgent` | Participant agent — generates conversational turns (`src/lib/agents/domain-agent.ts`) |
-| `ClassifierAgent` | Supervisor — returns one value from a fixed set (e.g., ACCEPTANCE / REJECTION / CONTINUE) |
-| `ExtractorAgent` | Supervisor — returns structured JSON matching the scenario's output schema |
-| `AppraiserAgent` | Supervisor — returns numerical ratings (e.g., SVI items 1–18) |
+| `BaseAgent` | Provider calls, retry logic, token tracking |
+| `DomainAgent` | Conversation participant — generates turns |
+| `ClassifierAgent` | Supervisor — classifies round state |
+| `ExtractorAgent` | Supervisor — extracts structured JSON |
+| `AppraiserAgent` | Supervisor — rates outcomes (e.g., SVI items) |
 
-Agents have no capability tier. Each agent has a `provider`, `model`, `temperature`, `maxTokens`, and a fully rendered `systemPrompt`. Tier semantics live only as factor level labels in experiment configs.
+No capability tiers in the platform. Each agent has a `provider`, `model`, `temperature`, and `systemPrompt`. Tier semantics live only in experiment factor labels.
 
-### Orchestrator
+### Orchestrator (`src/lib/orchestrator/`)
 
-`ConversationOrchestrator` (`src/lib/orchestrator/orchestrator.ts`) drives each dyad:
+Drives each dyad: load scenario → instantiate agents → loop (turn policy selects agent → generate → append → round complete? → run supervisors → check termination) → post-termination supervisors → compute outcomes → persist.
 
-1. Load scenario and frozen prompts
-2. Instantiate agents
-3. Loop: turn policy selects next domain agent → agent generates → append to transcript → when round complete, run per-round supervisors → check termination
-4. Post-termination: run post-termination supervisors, compute outcomes, persist
+### Turn Policies
 
-**Turn policies** (`src/lib/orchestrator/policies/`):
+| Policy | Pattern | Used by |
+|--------|---------|---------|
+| `alternating` | A → B → A → B | Procurement |
+| `structured_sequence` | A → B → C → A → B → C | Legal |
+| `mediator_led` | M → A → M → B → M → A | Mediation |
 
-| Policy | Use case |
-|--------|----------|
-| `alternating` | Two-party back-and-forth (Procurement) |
-| `structured_sequence` | Fixed order with multiple participants (Legal Advocacy) |
-| `mediator_led` | Mediator selects next speaker dynamically (Mediation) |
+### Experiment Runner (`src/lib/experiment/runner.ts`)
 
-### Scenarios
-
-A scenario defines domain agents, supervisors (with output schemas), turn policy, termination conditions, and an outcome schema. Scenarios are stored in Supabase and can be cloned and modified in the browser.
-
-Pre-built templates (`src/lib/scenario/templates.ts`):
-
-| Scenario | Agents | Supervisors | Turn Policy |
-|----------|--------|-------------|-------------|
-| Procurement Negotiation | Buyer, Seller | Judge (classifier), Analyst (extractor), Appraiser | Alternating |
-| Legal Advocacy | Plaintiff Lawyer, Defense Lawyer, Judge | Verdict Classifier, Argument Analyst, Persuasiveness Appraiser | Structured Sequence |
-| Mediation | Disputant A, Disputant B, Mediator | Agreement Extractor, Emotional Tone Analyser, Fairness Appraiser | Mediator-Led |
-
-### Experiment Runner
-
-`ExperimentRunner` (`src/lib/experiment/runner.ts`) enumerates cells from factor crossings, generates per-dyad parameter sets from a seed, and runs dyads with configurable concurrency (default: 5 parallel). Progress is persisted to Supabase after each dyad — a page refresh resumes from where the run stopped.
-
-**Dev mode** (`devMode: true`): skips supervisor agents, uses keyword-based termination, reduces concurrency to 1, approximately one-quarter of normal API cost.
+Enumerates cells from factor crossings, runs dyads with configurable concurrency (default 5), persists progress per dyad. Dev mode skips supervisors (~1/4 API cost).
 
 ---
 
@@ -108,14 +111,24 @@ Pre-built templates (`src/lib/scenario/templates.ts`):
 
 | Provider | Example Models | Notes |
 |----------|---------------|-------|
-| OpenAI | GPT-4.1, GPT-4o | Direct browser → API |
-| Anthropic | Claude Opus 4.6, Sonnet 4.6 | Direct browser → API |
-| Google | Gemini 1.5 Pro, Gemini Flash | Direct browser → API |
-| Mistral | Large, Medium, Small, 7B | Direct browser → API |
-| Meta | Llama 3.1 8B, 70B | OpenAI-compatible endpoint; configurable `baseUrl` |
-| Alibaba | Qwen 2.5 7B, 72B | DashScope or OpenAI-compatible; configurable `baseUrl` |
+| OpenAI | GPT-4o, GPT-4.1 | Direct browser → API |
+| Anthropic | Claude Sonnet 4.6, Opus 4.6 | Direct browser → API |
+| Google | Gemini 1.5 Pro, Flash | Direct browser → API |
+| Mistral | Large, Small | Direct browser → API |
+| Meta | Llama 3.1 8B, 70B | Configurable `baseUrl` |
+| Alibaba | Qwen 2.5 7B, 72B | Configurable `baseUrl` |
 
-API keys are stored in-browser (localStorage) and never sent to any backend other than the provider's own API.
+API keys are stored encrypted in the browser and synced to Supabase. They are never sent to any server other than the provider's own API.
+
+---
+
+## Tech Stack
+
+- **Frontend**: React 18, TypeScript, Vite, Tailwind CSS
+- **Backend**: Supabase (Postgres + Auth + RLS)
+- **Design**: DEXLab brand tokens (Deep Blue / Light Blue / Bright Orange)
+- **Testing**: Vitest (101 tests)
+- **Hosting**: Netlify
 
 ---
 
@@ -125,16 +138,24 @@ If you use this platform in published research, please cite:
 
 ```bibtex
 @article{heller2026multiagent,
-  title   = {Multi-Agent LLM Experiments in Negotiation Research},
-  author  = {Heller, Jonas and [Co-authors TBD]},
-  journal = {Journal of Public Sector Management},
+  title   = {Seller-Side Capability Risk in Agent-to-Agent Procurement Negotiations},
+  author  = {Heller, Jonas and Herold, David and Rozemeijer, Frank and Mahr, Dominik},
+  journal = {Journal of Purchasing and Supply Management},
   year    = {2026},
-  note    = {Preprint}
+  note    = {Preprint — platform available at multi-agent-chat-research.netlify.app}
 }
 ```
 
 ---
 
+## Contributing
+
+See [docs/contributing.md](docs/contributing.md) for how to add scenarios, providers, and contribute code.
+
+## Replicating the Paper
+
+See [docs/research-replication.md](docs/research-replication.md) for step-by-step instructions.
+
 ## License
 
-MIT License. Copyright (c) 2026 Jonas Heller / Maastricht University. See [LICENSE](LICENSE).
+MIT License. Copyright (c) 2026 Jonas Heller / DEXLab, Maastricht University. See [LICENSE](LICENSE).
