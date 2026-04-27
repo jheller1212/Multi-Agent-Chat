@@ -9,6 +9,7 @@ import { RunDashboard } from './RunDashboard';
 import { TranscriptViewer } from './TranscriptViewer';
 import { ScenarioBuilder } from './ScenarioBuilder';
 import { ExperimentLauncher } from './ExperimentLauncher';
+import { OnboardingTour } from './OnboardingTour';
 import { Icon } from './Icon';
 
 type ResearchScreen = 'library' | 'scenario' | 'experiment' | 'launch' | 'runs' | 'results' | 'transcript' | 'settings';
@@ -405,6 +406,9 @@ export function ResearchLayout({ onBack }: ResearchLayoutProps) {
   const [selectedScenarioId, setSelectedScenarioId] = useState<string | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [selectedDyadId, setSelectedDyadId] = useState<string | null>(null);
+  const [showTour, setShowTour] = useState<boolean>(
+    () => !localStorage.getItem('mac_tour_completed'),
+  );
 
   const handleSignOut = async () => {
     clearVault();
@@ -460,12 +464,17 @@ export function ResearchLayout({ onBack }: ResearchLayoutProps) {
     }
   }, []);
 
+  const handleTourNavigate = useCallback((tourScreen: 'library' | 'scenario' | 'experiment' | 'runs' | 'settings') => {
+    setScreen(tourScreen);
+  }, []);
+
   return (
     <ResearchShell
       activePage={PAGE_MAP[screen]}
       breadcrumb={BREADCRUMBS[screen]}
       onNavClick={handleNavClick}
       onSignOut={handleSignOut}
+      onTakeTour={() => setShowTour(true)}
     >
       {screen === 'library' && (
         <Library
@@ -511,6 +520,12 @@ export function ResearchLayout({ onBack }: ResearchLayoutProps) {
         />
       )}
       {screen === 'settings' && <SettingsScreen onSignOut={handleSignOut} />}
+      {showTour && (
+        <OnboardingTour
+          onNavigate={handleTourNavigate}
+          onClose={() => setShowTour(false)}
+        />
+      )}
     </ResearchShell>
   );
 }

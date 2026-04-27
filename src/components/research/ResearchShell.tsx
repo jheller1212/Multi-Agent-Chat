@@ -7,6 +7,7 @@ interface ResearchShellProps {
   children: ReactNode;
   onNavClick?: (page: string) => void;
   onSignOut?: () => void;
+  onTakeTour?: () => void;
 }
 
 function BrandMark() {
@@ -222,7 +223,7 @@ function NavItem({ id, label, icon, badge, active, onClick }: {
   );
 }
 
-function Sidebar({ activePage, onNavClick }: { activePage: string; onNavClick?: (page: string) => void }) {
+function Sidebar({ activePage, onNavClick, onTakeTour }: { activePage: string; onNavClick?: (page: string) => void; onTakeTour?: () => void }) {
   return (
     <div
       style={{
@@ -262,6 +263,24 @@ function Sidebar({ activePage, onNavClick }: { activePage: string; onNavClick?: 
         borderTop: '1px solid var(--line-1)',
         display: 'flex', flexDirection: 'column', gap: 6,
       }}>
+        {onTakeTour && (
+          <button
+            onClick={onTakeTour}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '6px 10px', borderRadius: 6,
+              background: 'transparent', border: 0, cursor: 'pointer',
+              fontFamily: 'var(--font-ui)', fontSize: 12,
+              color: 'var(--text-3)', textAlign: 'left',
+              width: '100%',
+            }}
+            onMouseEnter={e => (e.currentTarget.style.color = 'var(--text-2)')}
+            onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-3)')}
+          >
+            <Icon name="help" size={13} />
+            Take tour
+          </button>
+        )}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 8, borderRadius: 6 }}>
           <div style={{
             width: 28, height: 28, borderRadius: 6,
@@ -282,7 +301,7 @@ function Sidebar({ activePage, onNavClick }: { activePage: string; onNavClick?: 
   );
 }
 
-export function ResearchShell({ activePage, breadcrumb, children, onNavClick, onSignOut }: ResearchShellProps) {
+export function ResearchShell({ activePage, breadcrumb, children, onNavClick, onSignOut, onTakeTour }: ResearchShellProps) {
   return (
     <div
       data-density="compact"
@@ -298,7 +317,7 @@ export function ResearchShell({ activePage, breadcrumb, children, onNavClick, on
       }}
     >
       <Topbar breadcrumb={breadcrumb} onSignOut={onSignOut} />
-      <Sidebar activePage={activePage} onNavClick={onNavClick} />
+      <Sidebar activePage={activePage} onNavClick={onNavClick} onTakeTour={onTakeTour} />
       <div style={{ gridColumn: 2, gridRow: 2, overflow: 'auto', position: 'relative' }}>
         {children}
       </div>
