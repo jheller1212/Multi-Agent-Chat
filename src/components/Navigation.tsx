@@ -1,4 +1,3 @@
-import React from 'react';
 import { Logo } from './Logo';
 
 interface NavigationProps {
@@ -9,27 +8,34 @@ interface NavigationProps {
 
 export function Navigation({ onAuthClick, onSignUpClick, isAuthenticated }: NavigationProps) {
   return (
-    <nav className="fixed w-full bg-white/80 backdrop-blur-sm z-50 border-b border-gray-100">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16 items-center">
-          <Logo />
-          <div className="flex items-center gap-4">
-            {!isAuthenticated && (
-              <button
-                onClick={onAuthClick}
-                className="px-4 py-2 text-sm font-medium text-orange-600 hover:text-orange-500"
-              >
-                Sign in
-              </button>
-            )}
-            <button
-              onClick={isAuthenticated ? onAuthClick : onSignUpClick}
-              className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-orange-500 to-sky-500 rounded-lg hover:from-orange-400 hover:to-sky-400 shadow-md hover:shadow-lg transition-all"
-            >
-              {isAuthenticated ? 'Open App' : 'Get Started'}
-            </button>
-          </div>
-        </div>
+    <nav
+      style={{
+        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50,
+        background: 'var(--surface-panel)',
+        borderBottom: '1px solid var(--line-1)',
+        height: 'var(--topbar-h)',
+        display: 'flex', alignItems: 'center',
+        padding: '0 32px',
+      }}
+    >
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+        <Logo />
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {!isAuthenticated && (
+          <button
+            onClick={onAuthClick}
+            className="r-btn r-btn-ghost r-btn-sm"
+          >
+            Sign in
+          </button>
+        )}
+        <button
+          onClick={isAuthenticated ? onAuthClick : onSignUpClick}
+          className="r-btn r-btn-primary r-btn-sm"
+        >
+          {isAuthenticated ? 'Open App' : 'Get Started'}
+        </button>
       </div>
     </nav>
   );

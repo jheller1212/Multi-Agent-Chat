@@ -1,133 +1,140 @@
-# AI2AI Chat
+# Multi-Agent-Chat — Multi-Agent Research Platform
 
-A research tool for running structured conversations between two AI models. Each bot is configured independently — different provider, model, system prompt, and generation parameters — and you watch them talk to each other. Useful for studying how models respond to each other, testing prompt strategies, or collecting dialogue data for research.
+[![Build](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/jheller1212/Multi-Agent-Chat)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![Netlify](https://img.shields.io/badge/deployed-Netlify-00C7B7)](https://ai2aichat.com)
 
-**Live demo:** https://ai2aichat.netlify.app/
+A browser-first platform for designing and running multi-agent LLM experiments. Built by [DEXLab](https://dexlab.maastrichtuniversity.nl) at Maastricht University.
 
----
-
-## What it does
-
-You set up two AI bots side by side. Each one has its own provider, model version, system prompt, temperature, and token limit. You send an opening message and the two bots respond to each other in turn. You can let them run automatically or step through each response manually.
-
-The main things you can configure and control:
-
-**Per bot:**
-- Provider — OpenAI, Anthropic, Google Gemini, or Mistral
-- Model version (e.g. GPT-4o, Claude Sonnet 4.6, Gemini 1.5 Pro, Mistral Large)
-- System prompt — defines the bot's role, persona, and rules
-- Temperature (0–2) and max output tokens
-- Custom name, bubble colour, and text colour for the conversation view
-
-**Conversation controls:**
-- Auto-interact mode — the bots reply to each other automatically up to a set number of messages per bot (max 25 each)
-- Manual mode — click to trigger each response one at a time
-- Response delay — add a fixed pause between replies, with an optional length-based variance that scales with message length
-- Repetitions — run the same conversation from scratch multiple times in sequence (useful for collecting varied outputs to the same prompt)
-- Save to history — toggle whether the conversation is written to the database
-
-**Export:**
-- Plain text transcript
-- CSV with per-message metadata (sender, model, temperature, word count, response time in ms)
-- Screenshot of the conversation panel
-
-**Data view:**
-Alongside the chat view there is a live data table showing each message with its sender, model version, temperature, word count, and response time. This updates in real time during a conversation.
-
-**Conversation history:**
-Past conversations are saved to a Supabase database per user account. You can browse them, preview the full exchange, and reload any conversation back into the chat panel to continue or re-examine it.
-
-**Other:**
-- Dark mode (follows system preference on first visit, then remembers your choice)
-- User account settings — update display name, email, or password; delete your conversation history; or permanently delete your account
+Researchers configure scenarios, design factorial experiments, and launch runs — entirely from the browser, without writing code. Results export as structured CSVs ready for statistical analysis.
 
 ---
 
-## Supported models
+## Screenshots
 
-| Provider | Models |
-|----------|--------|
-| OpenAI | GPT-4o, GPT-4o Mini, GPT-4 Turbo, GPT-4, GPT-3.5 Turbo |
-| Anthropic | Claude Sonnet 4.6, Claude Opus 4.6, Claude Haiku 4.5, Claude 3.5 Sonnet, Claude 3.5 Haiku, Claude 3 Opus |
-| Google | Gemini 1.5 Pro, Gemini 1.5 Flash, Gemini Pro |
-| Mistral | Mistral Large, Mistral Medium, Mistral Small, Mistral 7B (open) |
+**Library** — Browse and clone pre-built scenario templates (Procurement Negotiation, Legal Advocacy, Mediation).
 
-API keys are entered in the bot configuration panel. They are stored in your browser's local storage and cleared automatically when you sign out. Nothing is transmitted to or stored on this server — requests go directly from your browser to each provider's API.
+**Run Dashboard** — Monitor experiment progress per cell in real time, pause/resume/abort runs, and inspect live transcripts.
 
 ---
 
-## Running locally
+## Features
 
-**Requirements:** Node.js 18+ and npm, and a [Supabase](https://supabase.com) project.
+- **3 pre-built scenarios** — Procurement Negotiation, Legal Advocacy, Mediation; each ships with domain agents, supervisors, and turn policies
+- **6 LLM providers** — OpenAI, Anthropic, Google, Mistral, Meta (Llama), Alibaba (Qwen); configure per agent, per experiment cell
+- **Factorial experiment design** — define factors and levels, assign models per cell, set N per cell; the platform cross-joins everything automatically
+- **Live run monitoring** — real-time progress dashboard via Supabase subscriptions; click any dyad to watch its transcript live
+- **Structured CSV export** — outcome records match a researcher-defined schema; drop into R or Python without post-processing
+- **Prompt template system** — Markdown templates with `{SLOT}` substitution and `[BLOCK]...[/BLOCK]` conditionals; slot autocomplete in the browser editor
+- **Freeze mechanism** — at launch, all prompts are rendered, hashed (SHA-256), and stored immutably; every dyad records the exact prompt used, guaranteeing replication
+
+---
+
+## Quickstart
 
 ```bash
-git clone https://github.com/JonasHeller1212/AI2AI-Chat.git
-cd AI2AI-Chat
+git clone https://github.com/jheller1212/Multi-Agent-Chat.git
+cd Multi-Agent-Chat
 npm install
 ```
 
 Create a `.env` file in the project root:
 
+```env
+VITE_SUPABASE_URL=your_supabase_project_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
-VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-key
-```
-
-Start the dev server:
 
 ```bash
 npm run dev
 ```
 
-The app runs at http://localhost:5173.
-
-**Set up the database schema:**
-
-Open the [Supabase SQL editor](https://supabase.com/dashboard) for your project and run the contents of `supabase/migrations/001_initial.sql`.
-
-**Deploy the Edge Function (required for account deletion):**
-
-Install the [Supabase CLI](https://supabase.com/docs/guides/cli), then:
-
-```bash
-supabase login
-supabase link --project-ref your-project-ref
-supabase functions deploy delete-account
-```
-
-The function uses the built-in `SUPABASE_SERVICE_ROLE_KEY` secret — no additional configuration is needed.
-
-To build for production:
-
-```bash
-npm run build
-```
-
-Output goes to `dist/`.
+Visit `http://localhost:5173`. Sign in, navigate to **Research > Library**, and clone a scenario to start.
 
 ---
 
-## Deploying to Netlify
+## Architecture Overview
 
-Connect the repo to [Netlify](https://netlify.com) and it will build and deploy automatically on every push to `main`. The `netlify.toml` in the repo root handles the build command and SPA routing.
+### Agents
 
-**One-time setup:**
+| Class | Role |
+|-------|------|
+| `BaseAgent` | Shared retry logic, provider calls, token tracking (`src/lib/agents/agent.ts`) |
+| `DomainAgent` | Participant agent — generates conversational turns (`src/lib/agents/domain-agent.ts`) |
+| `ClassifierAgent` | Supervisor — returns one value from a fixed set (e.g., ACCEPTANCE / REJECTION / CONTINUE) |
+| `ExtractorAgent` | Supervisor — returns structured JSON matching the scenario's output schema |
+| `AppraiserAgent` | Supervisor — returns numerical ratings (e.g., SVI items 1–18) |
 
-1. In your Netlify site settings, add two environment variables:
-   - `VITE_SUPABASE_URL`
-   - `VITE_SUPABASE_ANON_KEY`
+Agents have no capability tier. Each agent has a `provider`, `model`, `temperature`, `maxTokens`, and a fully rendered `systemPrompt`. Tier semantics live only as factor level labels in experiment configs.
 
-2. Run the database migration in the Supabase SQL editor (`supabase/migrations/001_initial.sql`).
+### Orchestrator
 
-3. Deploy the Edge Function (see the local setup instructions above). The function must be deployed from the Supabase CLI — it cannot be configured through Netlify.
+`ConversationOrchestrator` (`src/lib/orchestrator/orchestrator.ts`) drives each dyad:
+
+1. Load scenario and frozen prompts
+2. Instantiate agents
+3. Loop: turn policy selects next domain agent → agent generates → append to transcript → when round complete, run per-round supervisors → check termination
+4. Post-termination: run post-termination supervisors, compute outcomes, persist
+
+**Turn policies** (`src/lib/orchestrator/policies/`):
+
+| Policy | Use case |
+|--------|----------|
+| `alternating` | Two-party back-and-forth (Procurement) |
+| `structured_sequence` | Fixed order with multiple participants (Legal Advocacy) |
+| `mediator_led` | Mediator selects next speaker dynamically (Mediation) |
+
+### Scenarios
+
+A scenario defines domain agents, supervisors (with output schemas), turn policy, termination conditions, and an outcome schema. Scenarios are stored in Supabase and can be cloned and modified in the browser.
+
+Pre-built templates (`src/lib/scenario/templates.ts`):
+
+| Scenario | Agents | Supervisors | Turn Policy |
+|----------|--------|-------------|-------------|
+| Procurement Negotiation | Buyer, Seller | Judge (classifier), Analyst (extractor), Appraiser | Alternating |
+| Legal Advocacy | Plaintiff Lawyer, Defense Lawyer, Judge | Verdict Classifier, Argument Analyst, Persuasiveness Appraiser | Structured Sequence |
+| Mediation | Disputant A, Disputant B, Mediator | Agreement Extractor, Emotional Tone Analyser, Fairness Appraiser | Mediator-Led |
+
+### Experiment Runner
+
+`ExperimentRunner` (`src/lib/experiment/runner.ts`) enumerates cells from factor crossings, generates per-dyad parameter sets from a seed, and runs dyads with configurable concurrency (default: 5 parallel). Progress is persisted to Supabase after each dyad — a page refresh resumes from where the run stopped.
+
+**Dev mode** (`devMode: true`): skips supervisor agents, uses keyword-based termination, reduces concurrency to 1, approximately one-quarter of normal API cost.
 
 ---
 
-## Tech stack
+## Supported Providers
 
-- [React 18](https://react.dev/) + [TypeScript 5](https://www.typescriptlang.org/)
-- [Vite 5](https://vitejs.dev/)
-- [Tailwind CSS 3](https://tailwindcss.com/)
-- [Supabase](https://supabase.com/) — auth and conversation storage
-- [Lucide React](https://lucide.dev/) — icons
-- [html2canvas](https://html2canvas.hertzen.com/) — screenshot export
+| Provider | Example Models | Notes |
+|----------|---------------|-------|
+| OpenAI | GPT-4.1, GPT-4o | Direct browser → API |
+| Anthropic | Claude Opus 4.6, Sonnet 4.6 | Direct browser → API |
+| Google | Gemini 1.5 Pro, Gemini Flash | Direct browser → API |
+| Mistral | Large, Medium, Small, 7B | Direct browser → API |
+| Meta | Llama 3.1 8B, 70B | OpenAI-compatible endpoint; configurable `baseUrl` |
+| Alibaba | Qwen 2.5 7B, 72B | DashScope or OpenAI-compatible; configurable `baseUrl` |
+
+API keys are stored in-browser (localStorage) and never sent to any backend other than the provider's own API.
+
+---
+
+## Citation
+
+If you use this platform in published research, please cite:
+
+```bibtex
+@article{heller2026multiagent,
+  title   = {Multi-Agent LLM Experiments in Negotiation Research},
+  author  = {Heller, Jonas and [Co-authors TBD]},
+  journal = {Journal of Public Sector Management},
+  year    = {2026},
+  note    = {Preprint}
+}
+```
+
+---
+
+## License
+
+MIT License. Copyright (c) 2026 Jonas Heller / Maastricht University. See [LICENSE](LICENSE).

@@ -2,12 +2,25 @@ import { supabase } from '../supabase';
 
 /**
  * Export outcome records for a run as CSV string.
+ * Joins outcome_records → dyads to filter by run_id.
  */
 export async function exportRunCSV(runId: string): Promise<string> {
+  // Fetch dyad ids for this run first, then fetch outcome records
+  const { data: dyadRows, error: dyadError } = await supabase
+    .from('dyads')
+    .select('id')
+    .eq('run_id', runId);
+
+  if (dyadError || !dyadRows || dyadRows.length === 0) {
+    return '';
+  }
+
+  const dyadIds = dyadRows.map(d => d.id as string);
+
   const { data, error } = await supabase
     .from('outcome_records')
-    .select('data')
-    .eq('run_id', runId)
+    .select('dyad_id, outcomes')
+    .in('dyad_id', dyadIds)
     .order('created_at', { ascending: true });
 
   if (error || !data || data.length === 0) {
@@ -15,15 +28,18 @@ export async function exportRunCSV(runId: string): Promise<string> {
   }
 
   // Get column headers from the first record
-  const headers = Object.keys(data[0].data as Record<string, unknown>);
+  const firstOutcomes = data[0].outcomes as Record<string, unknown>;
+  const outcomeHeaders = Object.keys(firstOutcomes);
+  const headers = ['dyad_id', ...outcomeHeaders];
+
   const rows = data.map(row => {
-    const d = row.data as Record<string, unknown>;
-    return headers.map(h => {
-      const val = d[h];
+    const outcomes = row.outcomes as Record<string, unknown>;
+    return [row.dyad_id as string, ...outcomeHeaders.map(h => {
+      const val = outcomes[h];
       if (val === null || val === undefined) return '';
-      if (typeof val === 'string' && val.includes(',')) return `"${val}"`;
+      if (typeof val === 'string' && (val.includes(',') || val.includes('"'))) return `"${val.replaceAll('"', '""')}"`;
       return String(val);
-    }).join(',');
+    })].join(',');
   });
 
   return [headers.join(','), ...rows].join('\n');

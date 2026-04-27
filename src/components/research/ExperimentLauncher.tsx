@@ -1,6 +1,11 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Icon } from './Icon';
 import { supabase } from '../../lib/supabase';
+import { ExperimentRunner } from '../../lib/experiment/runner';
+import { loadVault } from '../../lib/apiKeyVault';
+import { loadScenario } from '../../lib/scenario/loader';
+import type { ExperimentDefinition } from '../../types/experiment';
+import type { ProviderType } from '../../types';
 
 interface ExperimentLauncherProps {
   scenarioId?: string;
@@ -28,6 +33,18 @@ const PROVIDER_OPTIONS = [
   { value: 'alibaba', label: 'Alibaba', dot: '#FF6A00' },
 ];
 
+// Map ProviderVault keys to ProviderType identifiers used by the runner
+function vaultToApiKeys(vault: ReturnType<typeof loadVault>): Record<string, string> {
+  return {
+    openai: vault.gpt4,
+    anthropic: vault.claude,
+    google: vault.gemini,
+    mistral: vault.mistral,
+    meta: vault.meta,
+    alibaba: vault.alibaba,
+  };
+}
+
 export function ExperimentLauncher({ scenarioId, scenarioName, onLaunch, onBack }: ExperimentLauncherProps) {
   const [name, setName] = useState(`${scenarioName ?? 'Experiment'} — run`);
   const [factors, setFactors] = useState<FactorConfig[]>(DEFAULT_FACTORS);
@@ -35,6 +52,8 @@ export function ExperimentLauncher({ scenarioId, scenarioName, onLaunch, onBack 
   const [concurrency, setConcurrency] = useState(5);
   const [devMode, setDevMode] = useState(true);
   const [launching, setLaunching] = useState(false);
+  const [launchError, setLaunchError] = useState<string | null>(null);
+  const runnerRef = useRef<ExperimentRunner | null>(null);
 
   const cellCount = factors.reduce((acc, f) => acc * f.levels.length, 1);
   const totalDyads = cellCount * nPerCell;
@@ -61,52 +80,101 @@ export function ExperimentLauncher({ scenarioId, scenarioName, onLaunch, onBack 
 
   const handleLaunch = async () => {
     setLaunching(true);
+    setLaunchError(null);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { setLaunching(false); return; }
+      if (!user) { setLaunchError('Not signed in.'); setLaunching(false); return; }
 
-      // Create experiment
+      const resolvedScenarioId = scenarioId ?? '00000000-0000-0000-0000-000000000000';
+
+      // Load the scenario
+      const scenario = await loadScenario(resolvedScenarioId);
+      if (!scenario) {
+        setLaunchError('Scenario not found. Select a scenario before launching.');
+        setLaunching(false);
+        return;
+      }
+
+      // Load API keys from vault
+      const vault = loadVault();
+      const apiKeys = vaultToApiKeys(vault);
+
+      // Create the logical experiment record so we have an ID to bind the run to
       const { data: experiment, error: expError } = await supabase
         .from('research_experiments')
         .insert({
           user_id: user.id,
-          scenario_id: scenarioId ?? '00000000-0000-0000-0000-000000000000',
+          scenario_id: resolvedScenarioId,
           name,
           description: `${cellCount} cells × ${nPerCell} dyads = ${totalDyads} total`,
           config: { factors, nPerCell, concurrency, devMode },
           status: 'running',
           progress: { total: totalDyads, completed: 0, failed: 0, excluded: 0 },
         })
-        .select()
+        .select('id')
         .single();
 
       if (expError || !experiment) {
-        console.error('Failed to create experiment:', expError);
+        setLaunchError(`Failed to create experiment: ${expError?.message ?? 'unknown'}`);
         setLaunching(false);
         return;
       }
 
-      // Create run
-      const { data: run, error: runError } = await supabase
-        .from('experiment_runs')
-        .insert({
-          experiment_id: experiment.id,
-          status: 'running',
-          config_snapshot: { factors, nPerCell, concurrency, devMode },
-          prompt_hashes: {},
-          progress: { total: totalDyads, completed: 0, failed: 0, excluded: 0 },
-        })
-        .select()
-        .single();
+      // Build agent assignments from scenario domain agents (default: openai / gpt-4o)
+      const defaultProvider: ProviderType = 'openai';
+      const agentAssignments = scenario.domainAgents.map(agent => ({
+        agentName: agent.name,
+        factorMappings: factors.reduce<Record<string, { provider: ProviderType; model: string; temperature: number }>>(
+          (acc, factor) => {
+            factor.levels.forEach(level => {
+              acc[`${factor.name}=${level}`] = { provider: defaultProvider, model: 'gpt-4o', temperature: 0.7 };
+            });
+            return acc;
+          },
+          {},
+        ),
+      }));
 
-      if (runError || !run) {
-        console.error('Failed to create run:', runError);
-        setLaunching(false);
-        return;
-      }
+      const experimentDef: ExperimentDefinition = {
+        id: experiment.id as string,
+        scenarioId: resolvedScenarioId,
+        name,
+        description: `${cellCount} cells × ${nPerCell} dyads = ${totalDyads} total`,
+        version: '1.0',
+        factors: factors.map(f => ({ name: f.name, levels: f.levels })),
+        targetNPerCell: nPerCell,
+        bufferPercent: 0,
+        agentAssignments,
+        params: {},
+        concurrency,
+        devMode,
+      };
 
-      onLaunch?.(run.id);
+      const runner = new ExperimentRunner(experimentDef, scenario, apiKeys);
+      runnerRef.current = runner;
+
+      // Register listener before calling start() to avoid race on 'run:started'
+      const runId = await new Promise<string>((resolve, reject) => {
+        const off = runner.on(event => {
+          if (event.type === 'run:started') {
+            off();
+            resolve(event.runId);
+          } else if (event.type === 'run:failed') {
+            off();
+            reject(new Error(event.error ?? 'Run failed to start'));
+          }
+        });
+
+        // start() creates the run row, emits 'run:started', then runs dyads
+        runner.start().catch(err => {
+          reject(err instanceof Error ? err : new Error(String(err)));
+        });
+      });
+
+      onLaunch?.(runId);
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setLaunchError(`Launch error: ${message}`);
       console.error('Launch error:', err);
       setLaunching(false);
     }
@@ -132,14 +200,21 @@ export function ExperimentLauncher({ scenarioId, scenarioName, onLaunch, onBack 
               Configure your factorial design and launch. {cellCount} cells × {nPerCell} dyads = {totalDyads} total.
             </p>
           </div>
-          <button
-            className="r-btn r-btn-primary"
-            onClick={handleLaunch}
-            disabled={launching || factors.length === 0}
-            style={{ opacity: launching ? 0.6 : 1 }}
-          >
-            {launching ? 'Launching...' : '🚀 Launch Experiment'}
-          </button>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+            <button
+              className="r-btn r-btn-primary"
+              onClick={handleLaunch}
+              disabled={launching || factors.length === 0}
+              style={{ opacity: launching ? 0.6 : 1 }}
+            >
+              {launching ? 'Launching...' : 'Launch Experiment'}
+            </button>
+            {launchError && (
+              <span style={{ fontSize: 11, color: 'var(--accent-1)', maxWidth: 320, textAlign: 'right' }}>
+                {launchError}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 

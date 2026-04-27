@@ -1,19 +1,51 @@
-import React from 'react';
-import { Bot } from 'lucide-react';
-
 export function Logo() {
   return (
-    <div className="flex items-center">
-      <div className="relative flex items-center">
-        <Bot className="h-7 w-7 text-orange-500" />
-        <Bot className="h-7 w-7 text-sky-500 -ml-2" />
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      <div
+        style={{
+          width: 28, height: 28, borderRadius: 7,
+          background: 'linear-gradient(135deg, var(--accent-2) 0 50%, var(--accent-1) 50% 100%)',
+          display: 'grid', placeItems: 'center',
+          position: 'relative', flexShrink: 0,
+        }}
+      >
+        <div
+          style={{
+            position: 'absolute', inset: 4, borderRadius: 4,
+            background: 'var(--surface-panel)',
+          }}
+        />
+        <span
+          style={{
+            position: 'relative', zIndex: 1,
+            fontFamily: 'var(--font-h)', fontWeight: 700, fontSize: 14,
+            letterSpacing: '0.02em',
+            background: 'linear-gradient(135deg, var(--accent-2) 0 50%, var(--accent-1) 50% 100%)',
+            WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent',
+          }}
+        >
+          M
+        </span>
       </div>
-      <span className="ml-2 text-xl font-heading font-bold text-lab-heading dark:text-white">
-        Multi-Agent-Chat
-      </span>
-      <span className="ml-2 text-xs font-medium text-lab-body dark:text-gray-400 tracking-wide uppercase">
-        Research
-      </span>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+        <span
+          style={{
+            fontFamily: 'var(--font-h)', fontWeight: 700, fontSize: 15,
+            letterSpacing: '-0.01em', color: 'var(--text-1)',
+          }}
+        >
+          Multi‑Agent‑Chat
+        </span>
+        <span
+          style={{
+            fontFamily: 'var(--font-ui)', fontWeight: 600, fontSize: 10,
+            letterSpacing: '0.06em', textTransform: 'uppercase',
+            color: 'var(--text-3)',
+          }}
+        >
+          RESEARCH
+        </span>
+      </div>
     </div>
   );
 }

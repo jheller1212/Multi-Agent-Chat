@@ -1,4 +1,4 @@
-import React from 'react';
+import { Icon } from './research/Icon';
 
 interface HeroSectionProps {
   onSignUpClick: () => void;
@@ -6,31 +6,73 @@ interface HeroSectionProps {
 
 export function HeroSection({ onSignUpClick }: HeroSectionProps) {
   return (
-    <div className="pt-24 pb-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-7xl mx-auto">
-        <div className="text-center">
-          <h1 className="text-5xl font-bold text-gray-900 mb-4">
-            Run multi-agent{' '}
-            <span className="bg-gradient-to-r from-orange-500 to-sky-500 text-transparent bg-clip-text">
-              LLM experiments.
-            </span>
-          </h1>
-          <p className="text-xl text-gray-600 mb-6 max-w-2xl mx-auto">
-            Configure AI agents, design factorial experiments, and collect structured
-            research data — all from the browser. Built for procurement, law, mediation,
-            and any multi-agent scenario.
-          </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-6">
-            <button
-              onClick={onSignUpClick}
-              className="px-8 py-4 text-lg font-medium text-white bg-gradient-to-r from-orange-500 to-sky-500 rounded-lg hover:from-orange-400 hover:to-sky-400 shadow-lg hover:shadow-xl transition-all"
-            >
-              Create free account
-            </button>
-          </div>
-          <p className="text-sm text-gray-500">Free to use · Bring your own API keys · 6 LLM providers supported</p>
+    <section
+      style={{
+        paddingTop: 'calc(var(--topbar-h) + 80px)',
+        paddingBottom: 80,
+        paddingLeft: 32,
+        paddingRight: 32,
+        background: 'var(--surface-canvas)',
+        textAlign: 'center',
+      }}
+    >
+      <div style={{ maxWidth: 720, margin: '0 auto' }}>
+        <div className="r-chip r-chip-blue" style={{ marginBottom: 20, display: 'inline-flex' }}>
+          <span className="pulse-dot" style={{ width: 6, height: 6 }} />
+          DEXLab · Maastricht University
         </div>
+
+        <h1
+          style={{
+            fontFamily: 'var(--font-h)', fontWeight: 700, fontSize: 44,
+            lineHeight: 1.1, letterSpacing: '-0.02em',
+            color: 'var(--text-1)', margin: '0 0 20px',
+          }}
+        >
+          Run multi-agent{' '}
+          <span
+            style={{
+              background: 'linear-gradient(135deg, var(--accent-2), var(--accent-1))',
+              WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent',
+            }}
+          >
+            LLM experiments.
+          </span>
+        </h1>
+
+        <p
+          style={{
+            fontFamily: 'var(--font-app)', fontSize: 17, lineHeight: 1.6,
+            color: 'var(--text-2)', margin: '0 0 36px', maxWidth: 560, marginLeft: 'auto', marginRight: 'auto',
+          }}
+        >
+          Configure scenarios, design factorial experiments, and collect structured
+          research data — all from the browser. Built for procurement, legal advocacy,
+          mediation, and any multi-agent interaction study.
+        </p>
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 24 }}>
+          <button
+            onClick={onSignUpClick}
+            className="r-btn r-btn-primary"
+            style={{ padding: '12px 28px', fontSize: 15 }}
+          >
+            <Icon name="play" size={16} />
+            Create free account
+          </button>
+          <button
+            className="r-btn r-btn-secondary"
+            style={{ padding: '12px 28px', fontSize: 15 }}
+          >
+            <Icon name="book" size={16} />
+            View docs
+          </button>
+        </div>
+
+        <p style={{ fontSize: 12, color: 'var(--text-4)', fontFamily: 'var(--font-ui)' }}>
+          Free to use · Bring your own API keys · 6 LLM providers supported
+        </p>
       </div>
-    </div>
+    </section>
   );
 }

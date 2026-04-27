@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { LogIn, Mail, Lock, AlertCircle, CheckCircle, ChevronDown, ChevronUp, Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, ChevronDown, ChevronUp } from 'lucide-react';
+import { Icon } from './research/Icon';
+import { Logo } from './Logo';
 
 const GoogleIcon = () => (
-  <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true">
+  <svg viewBox="0 0 24 24" width={16} height={16} aria-hidden="true">
     <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
     <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
     <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
@@ -12,7 +14,7 @@ const GoogleIcon = () => (
 );
 
 const GitHubIcon = () => (
-  <svg viewBox="0 0 24 24" className="w-5 h-5" fill="currentColor" aria-hidden="true">
+  <svg viewBox="0 0 24 24" width={16} height={16} fill="currentColor" aria-hidden="true">
     <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
   </svg>
 );
@@ -69,6 +71,27 @@ These Terms are governed by the laws of the European Union and, where applicable
 
 10. CHANGES TO TERMS
 These Terms may be updated from time to time. We will notify you by email or in-app notice for material changes. Continued use of the Service after the effective date constitutes acceptance of the revised terms.`;
+
+const inputStyle: React.CSSProperties = {
+  display: 'block', width: '100%', boxSizing: 'border-box',
+  padding: '9px 12px', borderRadius: 6,
+  border: '1px solid var(--line-2)',
+  background: 'var(--surface-panel)',
+  color: 'var(--text-1)',
+  fontFamily: 'var(--font-app)', fontSize: 14,
+  outline: 'none',
+};
+
+const inputWithIconStyle: React.CSSProperties = {
+  ...inputStyle,
+  paddingLeft: 36,
+};
+
+const inputWithIconRightStyle: React.CSSProperties = {
+  ...inputStyle,
+  paddingLeft: 36,
+  paddingRight: 36,
+};
 
 export function Auth({ onAuthSuccess, initialIsSignUp = false, workshopInfo }: AuthProps) {
   const [isSignUp, setIsSignUp] = useState(initialIsSignUp);
@@ -185,19 +208,34 @@ export function Auth({ onAuthSuccess, initialIsSignUp = false, workshopInfo }: A
 
   if (awaitingConfirmation) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white p-8 rounded-xl shadow-lg text-center space-y-6">
-          <CheckCircle className="mx-auto h-14 w-14 text-emerald-500" />
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">Check your email</h2>
-            <p className="mt-2 text-gray-600">
-              We sent a confirmation link to <span className="font-medium">{email}</span>.
-              Click the link to activate your account, then come back and sign in.
-            </p>
+      <div style={{ minHeight: '100vh', background: 'var(--surface-canvas)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+        <div
+          style={{
+            maxWidth: 420, width: '100%', background: 'var(--surface-panel)',
+            border: '1px solid var(--line-1)', borderRadius: 10,
+            boxShadow: 'var(--shadow-3)', padding: 36, textAlign: 'center',
+          }}
+        >
+          <div
+            style={{
+              width: 48, height: 48, borderRadius: '50%',
+              background: 'rgba(46,163,107,0.12)', color: 'var(--success)',
+              display: 'grid', placeItems: 'center', margin: '0 auto 20px',
+            }}
+          >
+            <Icon name="check" size={22} />
           </div>
+          <h2 style={{ fontFamily: 'var(--font-h)', fontWeight: 700, fontSize: 20, color: 'var(--text-1)', margin: '0 0 10px' }}>
+            Check your email
+          </h2>
+          <p style={{ fontSize: 14, color: 'var(--text-2)', lineHeight: 1.6, margin: '0 0 24px' }}>
+            We sent a confirmation link to <strong>{email}</strong>.
+            Click the link to activate your account, then come back and sign in.
+          </p>
           <button
             onClick={() => { setAwaitingConfirmation(false); switchMode(false); }}
-            className="w-full py-2 px-4 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700"
+            className="r-btn r-btn-primary"
+            style={{ width: '100%', justifyContent: 'center' }}
           >
             Back to Sign In
           </button>
@@ -207,39 +245,65 @@ export function Auth({ onAuthSuccess, initialIsSignUp = false, workshopInfo }: A
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-      <div className="max-w-md w-full space-y-6 bg-white p-8 rounded-xl shadow-lg">
-        {workshopInfo && (
-          <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 text-center space-y-1">
-            <h3 className="text-lg font-semibold text-indigo-900">{workshopInfo.name}</h3>
-            {workshopInfo.welcome && (
-              <p className="text-sm text-indigo-700">{workshopInfo.welcome}</p>
-            )}
-          </div>
-        )}
-        <div className="text-center">
-          <LogIn className="mx-auto h-12 w-12 text-indigo-600" />
-          <h2 className="mt-6 text-3xl font-bold text-gray-900">
-            {isSignUp ? 'Create your account' : 'Sign in to AI2AI Chat'}
+    <div style={{ minHeight: '100vh', background: 'var(--surface-canvas)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div
+        style={{
+          maxWidth: 420, width: '100%',
+          background: 'var(--surface-panel)',
+          border: '1px solid var(--line-1)',
+          borderRadius: 10,
+          boxShadow: 'var(--shadow-3)',
+          padding: 32,
+          display: 'flex', flexDirection: 'column', gap: 20,
+        }}
+      >
+        {/* Logo + heading */}
+        <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
+          <Logo />
+          <h2 style={{ fontFamily: 'var(--font-h)', fontWeight: 700, fontSize: 20, color: 'var(--text-1)', margin: 0 }}>
+            {isSignUp ? 'Create your account' : 'Sign in'}
           </h2>
         </div>
 
-        {error && (
-          <div className="bg-red-50 border-l-4 border-red-400 p-4 rounded">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-red-400 flex-shrink-0" />
-              <p className="text-sm text-red-700">{error}</p>
+        {/* Workshop banner */}
+        {workshopInfo && (
+          <div
+            style={{
+              background: 'var(--accent-2-soft)', border: '1px solid var(--accent-2)',
+              borderRadius: 6, padding: '12px 14px', textAlign: 'center',
+            }}
+          >
+            <div style={{ fontFamily: 'var(--font-h)', fontWeight: 700, fontSize: 14, color: 'var(--accent-2)', marginBottom: 4 }}>
+              {workshopInfo.name}
             </div>
+            {workshopInfo.welcome && (
+              <p style={{ fontSize: 13, color: 'var(--text-2)', margin: 0 }}>{workshopInfo.welcome}</p>
+            )}
+          </div>
+        )}
+
+        {/* Error */}
+        {error && (
+          <div
+            style={{
+              background: 'var(--accent-1-soft)', border: '1px solid var(--accent-1)',
+              borderRadius: 6, padding: '10px 12px',
+              display: 'flex', alignItems: 'flex-start', gap: 8,
+            }}
+          >
+            <Icon name="x" size={14} style={{ color: 'var(--accent-1)', flexShrink: 0, marginTop: 1 }} />
+            <p style={{ fontSize: 13, color: 'var(--accent-1)', margin: 0 }}>{error}</p>
           </div>
         )}
 
         {/* OAuth buttons */}
-        <div className="space-y-3">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <button
             type="button"
             onClick={() => handleOAuthSignIn('google')}
             disabled={loading}
-            className="w-full flex items-center justify-center gap-3 py-2 px-4 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="r-btn r-btn-secondary"
+            style={{ width: '100%', justifyContent: 'center' }}
           >
             <GoogleIcon />
             Continue with Google
@@ -248,33 +312,33 @@ export function Auth({ onAuthSuccess, initialIsSignUp = false, workshopInfo }: A
             type="button"
             onClick={() => handleOAuthSignIn('github')}
             disabled={loading}
-            className="w-full flex items-center justify-center gap-3 py-2 px-4 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="r-btn r-btn-secondary"
+            style={{ width: '100%', justifyContent: 'center' }}
           >
             <GitHubIcon />
             Continue with GitHub
           </button>
           {isSignUp && (
-            <p className="text-xs text-gray-500 text-center">
+            <p style={{ fontSize: 11, color: 'var(--text-4)', textAlign: 'center', margin: 0 }}>
               By continuing with Google or GitHub, you agree to our Terms of Use and Privacy Policy.
             </p>
           )}
         </div>
 
         {/* Divider */}
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-gray-200" />
-          </div>
-          <div className="relative flex justify-center text-xs">
-            <span className="bg-white px-3 text-gray-400">or continue with email</span>
-          </div>
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ flex: 1, height: 1, background: 'var(--line-1)' }} />
+          <span style={{ fontSize: 11, color: 'var(--text-4)', fontFamily: 'var(--font-ui)', whiteSpace: 'nowrap' }}>
+            or continue with email
+          </span>
+          <div style={{ flex: 1, height: 1, background: 'var(--line-1)' }} />
         </div>
 
-        <form className="space-y-4" onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {/* Email */}
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Mail className="h-5 w-5 text-gray-400" />
+          <div style={{ position: 'relative' }}>
+            <div style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-4)', pointerEvents: 'none' }}>
+              <Icon name="user" size={15} />
             </div>
             <input
               id="email"
@@ -282,15 +346,15 @@ export function Auth({ onAuthSuccess, initialIsSignUp = false, workshopInfo }: A
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="appearance-none rounded-lg block w-full pl-10 px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              style={inputWithIconStyle}
               placeholder="Email address"
             />
           </div>
 
           {/* Password */}
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Lock className="h-5 w-5 text-gray-400" />
+          <div style={{ position: 'relative' }}>
+            <div style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-4)', pointerEvents: 'none' }}>
+              <Icon name="eye" size={15} />
             </div>
             <input
               id="password"
@@ -298,23 +362,23 @@ export function Auth({ onAuthSuccess, initialIsSignUp = false, workshopInfo }: A
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="appearance-none rounded-lg block w-full pl-10 pr-10 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              style={inputWithIconRightStyle}
               placeholder="Password (min 6 characters)"
             />
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+              style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-4)', padding: 0 }}
             >
-              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
             </button>
           </div>
 
           {/* Confirm password — sign-up only */}
           {isSignUp && (
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Lock className="h-5 w-5 text-gray-400" />
+            <div style={{ position: 'relative' }}>
+              <div style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-4)', pointerEvents: 'none' }}>
+                <Icon name="eye" size={15} />
               </div>
               <input
                 id="confirmPassword"
@@ -322,48 +386,53 @@ export function Auth({ onAuthSuccess, initialIsSignUp = false, workshopInfo }: A
                 required
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="appearance-none rounded-lg block w-full pl-10 pr-10 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                style={inputWithIconRightStyle}
                 placeholder="Confirm password"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-4)', padding: 0 }}
               >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
               </button>
             </div>
           )}
 
-          {/* Terms & Conditions — sign-up only */}
+          {/* Terms — sign-up only */}
           {isSignUp && (
-            <div className="space-y-2">
-              {/* Expandable terms box */}
-              <div className="border border-gray-200 rounded-lg overflow-hidden">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ border: '1px solid var(--line-1)', borderRadius: 6, overflow: 'hidden' }}>
                 <button
                   type="button"
                   onClick={() => setShowTerms(!showTerms)}
-                  className="w-full flex items-center justify-between px-4 py-2 text-sm font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 transition-colors"
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '8px 12px', background: 'var(--surface-sunken)', border: 'none', cursor: 'pointer',
+                    fontSize: 13, color: 'var(--text-2)', fontFamily: 'var(--font-app)',
+                  }}
                 >
                   <span>View Terms of Use &amp; User Agreement</span>
-                  {showTerms ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  {showTerms ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                 </button>
                 {showTerms && (
-                  <pre className="px-4 py-3 text-xs text-gray-600 bg-white max-h-48 overflow-y-auto whitespace-pre-wrap font-sans leading-relaxed">
+                  <pre style={{
+                    padding: '12px', fontSize: 11, color: 'var(--text-2)',
+                    background: 'var(--surface-panel)', maxHeight: 180, overflowY: 'auto',
+                    whiteSpace: 'pre-wrap', fontFamily: 'var(--font-app)', lineHeight: 1.5, margin: 0,
+                  }}>
                     {TERMS_TEXT}
                   </pre>
                 )}
               </div>
-
-              {/* Checkbox */}
-              <label className="flex items-start gap-3 cursor-pointer">
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>
                 <input
                   type="checkbox"
                   checked={agreedToTerms}
                   onChange={(e) => setAgreedToTerms(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                  style={{ marginTop: 2, accentColor: 'var(--accent-1)' }}
                 />
-                <span className="text-sm text-gray-600">
+                <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5 }}>
                   I have read and agree to the Terms of Use, including that the service is provided without warranty, and I consent to receiving service-related emails.
                 </span>
               </label>
@@ -373,22 +442,24 @@ export function Auth({ onAuthSuccess, initialIsSignUp = false, workshopInfo }: A
           <button
             type="submit"
             disabled={loading}
-            className="w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="r-btn r-btn-primary"
+            style={{ width: '100%', justifyContent: 'center', padding: '10px 14px', fontSize: 14 }}
           >
             {loading ? 'Processing…' : isSignUp ? 'Create Account' : 'Sign in'}
           </button>
         </form>
 
+        {/* Forgot password */}
         {!isSignUp && (
-          <div className="text-center space-y-1">
+          <div style={{ textAlign: 'center' }}>
             {forgotSent ? (
-              <p className="text-sm text-emerald-600">Reset link sent — check your inbox.</p>
+              <p style={{ fontSize: 13, color: 'var(--success)', margin: 0 }}>Reset link sent — check your inbox.</p>
             ) : (
               <button
                 type="button"
                 onClick={handleForgotPassword}
                 disabled={loading}
-                className="text-sm text-gray-500 hover:text-indigo-600 disabled:opacity-50"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: 'var(--text-3)', fontFamily: 'var(--font-app)' }}
               >
                 Forgot password?
               </button>
@@ -396,10 +467,11 @@ export function Auth({ onAuthSuccess, initialIsSignUp = false, workshopInfo }: A
           </div>
         )}
 
-        <div className="text-center">
+        {/* Toggle sign-in / sign-up */}
+        <div style={{ textAlign: 'center' }}>
           <button
             onClick={() => switchMode(!isSignUp)}
-            className="text-sm text-indigo-600 hover:text-indigo-500"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: 'var(--accent-2)', fontFamily: 'var(--font-app)' }}
           >
             {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
           </button>

@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Icon } from './Icon';
+import { exportRunCSV, downloadCSV } from '../../lib/outcomes/csv-export';
 
 // --- Types ---
 
@@ -252,11 +253,15 @@ export interface RunDashboardProps {
   onInspectDyad?: (dyadId: string) => void;
 }
 
+const POLL_INTERVAL_MS = 5000;
+
 export function RunDashboard({ runId, onInspectDyad }: RunDashboardProps) {
   const [run, setRun] = useState<ExperimentRunRow | null>(null);
   const [dyads, setDyads] = useState<DyadRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [csvExporting, setCsvExporting] = useState(false);
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchData = useCallback(async () => {
     if (!runId) return;
@@ -273,9 +278,34 @@ export function RunDashboard({ runId, onInspectDyad }: RunDashboardProps) {
     }
   }, [runId]);
 
+  // Initial fetch
   useEffect(() => {
     void fetchData();
   }, [fetchData]);
+
+  // Poll every 5 seconds while the run is active
+  useEffect(() => {
+    if (!runId) return;
+
+    const scheduleNext = () => {
+      pollTimerRef.current = setTimeout(async () => {
+        await fetchData();
+        // Only continue polling if the run is still active
+        setRun(prev => {
+          if (prev && (prev.status === 'running' || prev.status === 'paused')) {
+            scheduleNext();
+          }
+          return prev;
+        });
+      }, POLL_INTERVAL_MS);
+    };
+
+    scheduleNext();
+
+    return () => {
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+    };
+  }, [runId, fetchData]);
 
   const handlePause = async () => {
     if (!runId) return;
@@ -288,9 +318,26 @@ export function RunDashboard({ runId, onInspectDyad }: RunDashboardProps) {
   const handleAbort = async () => {
     if (!runId) return;
     setActionError(null);
-    const { error } = await supabase.from('experiment_runs').update({ status: 'aborted' }).eq('id', runId);
+    const { error } = await supabase.from('experiment_runs').update({ status: 'failed' }).eq('id', runId);
     if (error) { setActionError(error.message); return; }
-    setRun((prev) => prev ? { ...prev, status: 'aborted' } : prev);
+    setRun((prev) => prev ? { ...prev, status: 'failed' } : prev);
+  };
+
+  const handleSnapshotCSV = async () => {
+    if (!runId) return;
+    setCsvExporting(true);
+    try {
+      const csv = await exportRunCSV(runId);
+      if (csv) {
+        downloadCSV(csv, `run-${runId.slice(0, 8)}-snapshot.csv`);
+      } else {
+        setActionError('No outcome data available yet for this run.');
+      }
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'CSV export failed');
+    } finally {
+      setCsvExporting(false);
+    }
   };
 
   // Find first dyad id for each cell (for Inspect button when no specific dyad is selected)
@@ -389,8 +436,12 @@ export function RunDashboard({ runId, onInspectDyad }: RunDashboardProps) {
               >
                 <Icon name="stop" size={13} /> Abort
               </button>
-              <button className="r-btn r-btn-ghost">
-                <Icon name="download" size={13} /> Snapshot CSV
+              <button
+                className="r-btn r-btn-ghost"
+                onClick={isDemo ? undefined : handleSnapshotCSV}
+                disabled={!isDemo && csvExporting}
+              >
+                <Icon name="download" size={13} /> {csvExporting ? 'Exporting...' : 'Snapshot CSV'}
               </button>
             </div>
             {actionError && (
