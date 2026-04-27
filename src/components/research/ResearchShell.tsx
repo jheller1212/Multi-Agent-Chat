@@ -42,12 +42,21 @@ function BrandMark() {
 }
 
 function Topbar({ breadcrumb, onSignOut }: { breadcrumb: string[]; onSignOut?: () => void }) {
-  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    const stored = localStorage.getItem('mac_theme');
+    return stored === 'dark' ? 'dark' : 'light';
+  });
 
   const toggleTheme = () => {
     const next = theme === 'light' ? 'dark' : 'light';
     setTheme(next);
+    localStorage.setItem('mac_theme', next);
     document.documentElement.setAttribute('data-theme', next);
+    if (next === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
   };
 
   return (
@@ -254,7 +263,7 @@ function Sidebar({ activePage, onNavClick }: { activePage: string; onNavClick?: 
       }}>
         Account
       </div>
-      <NavItem id="settings" label="Settings" icon="settings" active={activePage === 'settings'} />
+      <NavItem id="settings" label="Settings" icon="settings" active={activePage === 'settings'} onClick={() => onNavClick?.('settings')} />
 
       {/* Footer */}
       <div style={{

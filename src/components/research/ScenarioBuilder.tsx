@@ -1212,9 +1212,10 @@ function buildDefaultConfig(): Omit<Scenario, 'id' | 'userId' | 'createdAt' | 'u
 
 interface ScenarioBuilderProps {
   scenarioId?: string;
+  onUseInExperiment?: (scenarioId: string) => void;
 }
 
-export function ScenarioBuilder({ scenarioId }: ScenarioBuilderProps) {
+export function ScenarioBuilder({ scenarioId, onUseInExperiment }: ScenarioBuilderProps) {
   const [tab, setTab] = useState<TabId>('agents');
   const [scenario, setScenario] = useState<Scenario | null>(null);
   const [scenarioName, setScenarioName] = useState('B2B Renegotiation — capability variant');
@@ -1401,7 +1402,13 @@ export function ScenarioBuilder({ scenarioId }: ScenarioBuilderProps) {
             </button>
             <button
               className="r-btn r-btn-primary"
-              onClick={() => setShowExperimentMsg(true)}
+              onClick={() => {
+                if (onUseInExperiment && currentId) {
+                  onUseInExperiment(currentId);
+                } else {
+                  setShowExperimentMsg(true);
+                }
+              }}
             >
               <Icon name="flask" size={14} /> Use in experiment
             </button>

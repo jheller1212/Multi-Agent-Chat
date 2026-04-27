@@ -54,7 +54,7 @@ const paths: Record<string, JSX.Element> = {
 };
 
 export function Icon({ name, size = 16, stroke = 1.6, className }: IconProps) {
-  const path = paths[name];
+  const path = paths[name] ?? paths[name === 'close' ? 'x' : ''];
   if (!path) return null;
 
   return (

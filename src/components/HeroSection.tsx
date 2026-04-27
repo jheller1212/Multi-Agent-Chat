@@ -60,13 +60,16 @@ export function HeroSection({ onSignUpClick }: HeroSectionProps) {
             <Icon name="play" size={16} />
             Create free account
           </button>
-          <button
+          <a
+            href="https://github.com/jheller1212/Multi-Agent-Chat#readme"
+            target="_blank"
+            rel="noopener noreferrer"
             className="r-btn r-btn-secondary"
-            style={{ padding: '12px 28px', fontSize: 15 }}
+            style={{ padding: '12px 28px', fontSize: 15, textDecoration: 'none' }}
           >
             <Icon name="book" size={16} />
             View docs
-          </button>
+          </a>
         </div>
 
         <p style={{ fontSize: 12, color: 'var(--text-4)', fontFamily: 'var(--font-ui)' }}>

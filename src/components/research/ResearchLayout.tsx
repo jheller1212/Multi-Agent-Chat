@@ -44,8 +44,6 @@ interface ResearchLayoutProps {
 }
 
 function SettingsScreen({ onSignOut }: { onSignOut: () => void }) {
-  const [email, setEmail] = useState('');
-  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [message, setMessage] = useState('');
 
@@ -353,7 +351,12 @@ export function ResearchLayout({ onBack }: ResearchLayoutProps) {
           onViewRuns={() => setScreen('runs')}
         />
       )}
-      {screen === 'scenario' && <ScenarioBuilder scenarioId={selectedScenarioId ?? undefined} />}
+      {screen === 'scenario' && (
+        <ScenarioBuilder
+          scenarioId={selectedScenarioId ?? undefined}
+          onUseInExperiment={(id) => { setSelectedScenarioId(id); setScreen('experiment'); }}
+        />
+      )}
       {screen === 'experiment' && (
         <ExperimentLauncher
           scenarioId={selectedScenarioId ?? undefined}
