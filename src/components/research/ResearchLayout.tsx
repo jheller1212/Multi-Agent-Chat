@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { clearVault, loadVault, saveVault, type ProviderVault } from '../../lib/apiKeyVault';
 import { cloneScenario, saveScenario } from '../../lib/scenario/loader';
-import { exportRunCSV, downloadCSV } from '../../lib/outcomes/csv-export';
+import { exportExperimentCSV, downloadCSV } from '../../lib/outcomes/csv-export';
 import { ResearchShell } from './ResearchShell';
 import { Library } from './Library';
 import { RunDashboard } from './RunDashboard';
@@ -19,9 +19,9 @@ const BREADCRUMBS: Record<ResearchScreen, string[]> = {
   scenario: ['Research', 'Scenarios', 'B2B Renegotiation — capability variant'],
   experiment: ['Research', 'Experiments'],
   launch: ['Research', 'Experiments', 'Configure & Launch'],
-  runs: ['Research', 'Experiments', 'Buyer Capability × Provider', 'Run #14'],
+  runs: ['Research', 'Experiments', 'Buyer Capability × Provider', 'Experiment'],
   results: ['Research', 'Results'],
-  transcript: ['Research', 'Run #14', 'Cell A4', 'd_0247'],
+  transcript: ['Research', 'Experiment', 'Cell A4', 'd_0247'],
   settings: ['Account', 'Settings'],
 };
 
@@ -229,37 +229,37 @@ function SettingsScreen({ onSignOut }: { onSignOut: () => void }) {
   );
 }
 
-interface RunRow {
+interface ExperimentResultRow {
   id: string;
+  name: string | null;
   status: string | null;
-  config_snapshot: Record<string, unknown> | null;
   progress: { total?: number; completed?: number } | null;
   started_at: string | null;
   completed_at: string | null;
 }
 
 function ResultsScreen() {
-  const [runs, setRuns] = useState<RunRow[]>([]);
+  const [experiments, setExperiments] = useState<ExperimentResultRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState<string | null>(null);
 
   useEffect(() => {
     void (async () => {
       const { data } = await supabase
-        .from('experiment_runs')
-        .select('id, status, config_snapshot, progress, started_at, completed_at')
+        .from('research_experiments')
+        .select('id, name, status, progress, started_at, completed_at')
         .eq('status', 'completed')
         .order('started_at', { ascending: false })
         .limit(50);
-      setRuns((data ?? []) as RunRow[]);
+      setExperiments((data ?? []) as ExperimentResultRow[]);
       setLoading(false);
     })();
   }, []);
 
-  const handleDownload = async (runId: string, name: string | null) => {
-    setDownloading(runId);
-    const csv = await exportRunCSV(runId);
-    if (csv) downloadCSV(csv, `${name ?? runId}.csv`);
+  const handleDownload = async (experimentId: string, name: string | null) => {
+    setDownloading(experimentId);
+    const csv = await exportExperimentCSV(experimentId);
+    if (csv) downloadCSV(csv, `${name ?? experimentId}.csv`);
     setDownloading(null);
   };
 
@@ -267,21 +267,21 @@ function ResultsScreen() {
     <div>
       <div className="r-page-head">
         <h1 className="r-page-title">Results</h1>
-        <p className="r-page-sub">Completed experiment runs — download CSV outputs.</p>
+        <p className="r-page-sub">Completed experiments — download CSV outputs.</p>
       </div>
       <div className="r-page-body">
         {loading ? (
           <p style={{ color: 'var(--text-3)', fontSize: 13 }}>Loading…</p>
-        ) : runs.length === 0 ? (
+        ) : experiments.length === 0 ? (
           <div style={{ textAlign: 'center', color: 'var(--text-3)', paddingTop: 60 }}>
             <Icon name="chart" size={48} stroke={1} />
-            <p style={{ marginTop: 16, fontSize: 14 }}>No completed runs yet.</p>
+            <p style={{ marginTop: 16, fontSize: 14 }}>No completed experiments yet.</p>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 720 }}>
-            {runs.map(run => (
+            {experiments.map(exp => (
               <div
-                key={run.id}
+                key={exp.id}
                 style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                   padding: '12px 16px', border: '1px solid var(--line-1)',
@@ -290,20 +290,20 @@ function ResultsScreen() {
               >
                 <div>
                   <div style={{ fontFamily: 'var(--font-h)', fontSize: 14, fontWeight: 700, color: 'var(--text-1)' }}>
-                    Run {run.id.slice(0, 8)}
+                    {exp.name ?? `Experiment ${exp.id.slice(0, 8)}`}
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
-                    {run.progress?.completed ?? 0} / {run.progress?.total ?? '?'} dyads &middot;{' '}
-                    {run.started_at ? new Date(run.started_at).toLocaleDateString() : '—'}
+                    {exp.progress?.completed ?? 0} / {exp.progress?.total ?? '?'} dyads &middot;{' '}
+                    {exp.started_at ? new Date(exp.started_at).toLocaleDateString() : '—'}
                   </div>
                 </div>
                 <button
                   className="r-btn r-btn-secondary r-btn-sm"
-                  onClick={() => void handleDownload(run.id, `run-${run.id.slice(0, 8)}`)}
-                  disabled={downloading === run.id}
+                  onClick={() => void handleDownload(exp.id, exp.name ?? `experiment-${exp.id.slice(0, 8)}`)}
+                  disabled={downloading === exp.id}
                 >
                   <Icon name="download" size={13} />
-                  {downloading === run.id ? 'Downloading…' : 'Download CSV'}
+                  {downloading === exp.id ? 'Downloading…' : 'Download CSV'}
                 </button>
               </div>
             ))}
@@ -404,7 +404,7 @@ function HistoryScreen() {
 export function ResearchLayout({ onBack }: ResearchLayoutProps) {
   const [screen, setScreen] = useState<ResearchScreen>('library');
   const [selectedScenarioId, setSelectedScenarioId] = useState<string | null>(null);
-  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [selectedExperimentId, setSelectedExperimentId] = useState<string | null>(null);
   const [selectedDyadId, setSelectedDyadId] = useState<string | null>(null);
   const [showTour, setShowTour] = useState<boolean>(
     () => !localStorage.getItem('mac_tour_completed'),
@@ -464,6 +464,33 @@ export function ResearchLayout({ onBack }: ResearchLayoutProps) {
     }
   }, []);
 
+  const handleDuplicateExperiment = useCallback(async (experimentId: string) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data: source } = await supabase
+      .from('research_experiments')
+      .select('scenario_id, name, description, config')
+      .eq('id', experimentId)
+      .single();
+    if (!source) return;
+    const { data: copy } = await supabase
+      .from('research_experiments')
+      .insert({
+        user_id: user.id,
+        scenario_id: source.scenario_id,
+        name: `${source.name} (copy)`,
+        description: source.description,
+        config: source.config,
+        status: 'draft',
+      })
+      .select('id')
+      .single();
+    if (copy) {
+      setSelectedExperimentId(copy.id as string);
+      setScreen('experiment');
+    }
+  }, []);
+
   const handleTourNavigate = useCallback((tourScreen: 'library' | 'scenario' | 'experiment' | 'runs' | 'settings') => {
     setScreen(tourScreen);
   }, []);
@@ -494,7 +521,7 @@ export function ResearchLayout({ onBack }: ResearchLayoutProps) {
         <ExperimentLauncher
           scenarioId={selectedScenarioId ?? undefined}
           scenarioName="Experiment"
-          onLaunch={(runId) => { setSelectedRunId(runId); setScreen('runs'); }}
+          onLaunch={(experimentId) => { setSelectedExperimentId(experimentId); setScreen('runs'); }}
           onBack={() => setScreen('library')}
         />
       )}
@@ -502,13 +529,13 @@ export function ResearchLayout({ onBack }: ResearchLayoutProps) {
         <ExperimentLauncher
           scenarioId={selectedScenarioId ?? undefined}
           scenarioName="Experiment"
-          onLaunch={(runId) => { setSelectedRunId(runId); setScreen('runs'); }}
+          onLaunch={(experimentId) => { setSelectedExperimentId(experimentId); setScreen('runs'); }}
           onBack={() => setScreen('scenario')}
         />
       )}
       {screen === 'runs' && (
         <RunDashboard
-          runId={selectedRunId ?? undefined}
+          experimentId={selectedExperimentId ?? undefined}
           onInspectDyad={(dyadId: string) => { setSelectedDyadId(dyadId); setScreen('transcript'); }}
         />
       )}

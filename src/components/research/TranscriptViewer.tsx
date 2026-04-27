@@ -96,7 +96,7 @@ interface DyadDetailRow {
   termination_turn: number | null;
   completed_at: string | null;
   started_at: string | null;
-  run_id: string;
+  experiment_id: string;
 }
 
 /* ── Helpers ── */
@@ -442,7 +442,7 @@ export function TranscriptViewer({ dyadId, onNavigateDyad, onBack }: TranscriptV
       const [dyadResult, messagesResult, supervisorResult] = await Promise.all([
         supabase
           .from('dyads')
-          .select('id, cell_label, factors, status, seed, termination_reason, termination_turn, completed_at, started_at, run_id')
+          .select('id, cell_label, factors, status, seed, termination_reason, termination_turn, completed_at, started_at, experiment_id')
           .eq('id', dyadId)
           .single(),
         supabase
@@ -512,7 +512,7 @@ export function TranscriptViewer({ dyadId, onNavigateDyad, onBack }: TranscriptV
                 style={{ color: 'var(--accent-2)', textDecoration: 'none' }}
                 onClick={(e) => { e.preventDefault(); onBack?.(); }}
               >
-                {isDemo ? 'Run #14' : `Run ${dyad?.run_id?.slice(0, 8) ?? ''}`}
+                {isDemo ? 'Experiment #14' : `Experiment ${dyad?.experiment_id?.slice(0, 8) ?? ''}`}
               </a>
               <Icon name="chevron" size={12} />
               <a href="#" style={{ color: 'var(--accent-2)', textDecoration: 'none' }}>Cell {cellLabel}</a>

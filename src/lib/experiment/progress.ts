@@ -10,13 +10,13 @@ export interface RunProgress {
 }
 
 /**
- * Fetch live progress for an experiment run.
+ * Fetch live progress for an experiment.
  */
-export async function getRunProgress(runId: string): Promise<RunProgress> {
+export async function getExperimentProgress(experimentId: string): Promise<RunProgress> {
   const { data, error } = await supabase
     .from('dyads')
     .select('status')
-    .eq('run_id', runId);
+    .eq('experiment_id', experimentId);
 
   if (error || !data) {
     return { total: 0, completed: 0, failed: 0, excluded: 0, running: 0, pending: 0 };
@@ -38,11 +38,11 @@ export async function getRunProgress(runId: string): Promise<RunProgress> {
 }
 
 /**
- * Update run progress in the experiment_runs table.
+ * Update progress in the research_experiments table.
  */
-export async function updateRunProgress(runId: string, progress: RunProgress): Promise<void> {
+export async function updateExperimentProgress(experimentId: string, progress: RunProgress): Promise<void> {
   await supabase
-    .from('experiment_runs')
+    .from('research_experiments')
     .update({ progress })
-    .eq('id', runId);
+    .eq('id', experimentId);
 }

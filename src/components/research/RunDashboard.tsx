@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Icon } from './Icon';
-import { exportRunCSV, downloadCSV } from '../../lib/outcomes/csv-export';
+import { exportExperimentCSV, downloadCSV } from '../../lib/outcomes/csv-export';
 
 // --- Types ---
 
@@ -63,10 +63,11 @@ const MOCK_ANOMALIES: AnomalyData[] = [
 
 // --- Supabase row types ---
 
-interface ExperimentRunRow {
+interface ExperimentRow {
   id: string;
   status: string;
   config_snapshot: Record<string, unknown> | null;
+  name: string;
   started_at: string | null;
   completed_at: string | null;
   progress: {
@@ -249,14 +250,14 @@ function formatTime(iso: string | null): string {
 // --- Main component ---
 
 export interface RunDashboardProps {
-  runId?: string;
+  experimentId?: string;
   onInspectDyad?: (dyadId: string) => void;
 }
 
 const POLL_INTERVAL_MS = 5000;
 
-export function RunDashboard({ runId, onInspectDyad }: RunDashboardProps) {
-  const [run, setRun] = useState<ExperimentRunRow | null>(null);
+export function RunDashboard({ experimentId, onInspectDyad }: RunDashboardProps) {
+  const [experiment, setExperiment] = useState<ExperimentRow | null>(null);
   const [dyads, setDyads] = useState<DyadRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -264,34 +265,34 @@ export function RunDashboard({ runId, onInspectDyad }: RunDashboardProps) {
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchData = useCallback(async () => {
-    if (!runId) return;
+    if (!experimentId) return;
     setLoading(true);
     try {
-      const [runResult, dyadsResult] = await Promise.all([
-        supabase.from('experiment_runs').select('id, status, config_snapshot, started_at, completed_at, progress').eq('id', runId).single(),
-        supabase.from('dyads').select('id, cell_label, factors, status, started_at, completed_at, failure_reason, termination_reason').eq('run_id', runId),
+      const [expResult, dyadsResult] = await Promise.all([
+        supabase.from('research_experiments').select('id, status, config_snapshot, name, started_at, completed_at, progress').eq('id', experimentId).single(),
+        supabase.from('dyads').select('id, cell_label, factors, status, started_at, completed_at, failure_reason, termination_reason').eq('experiment_id', experimentId),
       ]);
-      if (runResult.data) setRun(runResult.data as ExperimentRunRow);
+      if (expResult.data) setExperiment(expResult.data as ExperimentRow);
       if (dyadsResult.data) setDyads(dyadsResult.data as DyadRow[]);
     } finally {
       setLoading(false);
     }
-  }, [runId]);
+  }, [experimentId]);
 
   // Initial fetch
   useEffect(() => {
     void fetchData();
   }, [fetchData]);
 
-  // Poll every 5 seconds while the run is active
+  // Poll every 5 seconds while the experiment is active
   useEffect(() => {
-    if (!runId) return;
+    if (!experimentId) return;
 
     const scheduleNext = () => {
       pollTimerRef.current = setTimeout(async () => {
         await fetchData();
-        // Only continue polling if the run is still active
-        setRun(prev => {
+        // Only continue polling if the experiment is still active
+        setExperiment(prev => {
           if (prev && (prev.status === 'running' || prev.status === 'paused')) {
             scheduleNext();
           }
@@ -305,33 +306,33 @@ export function RunDashboard({ runId, onInspectDyad }: RunDashboardProps) {
     return () => {
       if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
     };
-  }, [runId, fetchData]);
+  }, [experimentId, fetchData]);
 
   const handlePause = async () => {
-    if (!runId) return;
+    if (!experimentId) return;
     setActionError(null);
-    const { error } = await supabase.from('experiment_runs').update({ status: 'paused' }).eq('id', runId);
+    const { error } = await supabase.from('research_experiments').update({ status: 'paused' }).eq('id', experimentId);
     if (error) { setActionError(error.message); return; }
-    setRun((prev) => prev ? { ...prev, status: 'paused' } : prev);
+    setExperiment((prev) => prev ? { ...prev, status: 'paused' } : prev);
   };
 
   const handleAbort = async () => {
-    if (!runId) return;
+    if (!experimentId) return;
     setActionError(null);
-    const { error } = await supabase.from('experiment_runs').update({ status: 'failed' }).eq('id', runId);
+    const { error } = await supabase.from('research_experiments').update({ status: 'failed' }).eq('id', experimentId);
     if (error) { setActionError(error.message); return; }
-    setRun((prev) => prev ? { ...prev, status: 'failed' } : prev);
+    setExperiment((prev) => prev ? { ...prev, status: 'failed' } : prev);
   };
 
   const handleSnapshotCSV = async () => {
-    if (!runId) return;
+    if (!experimentId) return;
     setCsvExporting(true);
     try {
-      const csv = await exportRunCSV(runId);
+      const csv = await exportExperimentCSV(experimentId);
       if (csv) {
-        downloadCSV(csv, `run-${runId.slice(0, 8)}-snapshot.csv`);
+        downloadCSV(csv, `experiment-${experimentId.slice(0, 8)}-snapshot.csv`);
       } else {
-        setActionError('No outcome data available yet for this run.');
+        setActionError('No outcome data available yet for this experiment.');
       }
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'CSV export failed');
@@ -346,7 +347,7 @@ export function RunDashboard({ runId, onInspectDyad }: RunDashboardProps) {
   };
 
   // --- Derived data ---
-  const isDemo = !runId;
+  const isDemo = !experimentId;
 
   const cells: CellData[] = isDemo ? MOCK_CELLS : dyadsToCells(dyads);
   const liveEvents: LiveEvent[] = isDemo ? MOCK_LIVE : [];
@@ -363,17 +364,16 @@ export function RunDashboard({ runId, onInspectDyad }: RunDashboardProps) {
   const queuedCells = cells.filter((c) => c.status === 'queued').length;
   const anomPct = totalDone > 0 ? ((100 * totalAnom) / totalDone).toFixed(1) : '0.0';
 
-  const runStatus = isDemo ? 'running' : (run?.status ?? 'unknown');
-  const isRunning = runStatus === 'running';
+  const experimentStatus = isDemo ? 'running' : (experiment?.status ?? 'unknown');
+  const isRunning = experimentStatus === 'running';
 
-  const configSnapshot = run?.config_snapshot as { name?: string } | null;
-  const runName = configSnapshot?.name ?? (isDemo ? 'Buyer Capability \u00d7 Provider' : runId ?? 'Run');
-  const startedAt = isDemo ? '14:08' : formatTime(run?.started_at ?? null);
+  const experimentName = experiment?.name ?? (isDemo ? 'Buyer Capability \u00d7 Provider' : experimentId ?? 'Experiment');
+  const startedAt = isDemo ? '14:08' : formatTime(experiment?.started_at ?? null);
 
-  if (!isDemo && loading && !run) {
+  if (!isDemo && loading && !experiment) {
     return (
       <div className="run-page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 60 }}>
-        <span style={{ color: 'var(--text-3)', fontSize: 14 }}>Loading run data...</span>
+        <span style={{ color: 'var(--text-3)', fontSize: 14 }}>Loading experiment data...</span>
       </div>
     );
   }
@@ -398,11 +398,7 @@ export function RunDashboard({ runId, onInspectDyad }: RunDashboardProps) {
                 Experiments
               </a>
               <Icon name="chevron" size={12} />
-              <a href="#" style={{ color: 'var(--text-3)', textDecoration: 'none' }}>
-                {runName}
-              </a>
-              <Icon name="chevron" size={12} />
-              <span style={{ color: 'var(--text-1)' }}>{isDemo ? 'Run #14' : `Run ${runId?.slice(0, 8) ?? ''}`}</span>
+              <span style={{ color: 'var(--text-1)' }}>{isDemo ? 'Buyer Capability \u00d7 Provider' : experimentName}</span>
             </div>
             <h1 className="r-page-title" style={{ marginTop: 6 }}>
               {isRunning && (
@@ -411,13 +407,13 @@ export function RunDashboard({ runId, onInspectDyad }: RunDashboardProps) {
                   style={{ width: 8, height: 8, display: 'inline-block', verticalAlign: 'middle', marginRight: 8 }}
                 />
               )}{' '}
-              {runName} &middot; {isDemo ? 'Run #14' : `Run ${runId?.slice(0, 8) ?? ''}`}
+              {experimentName}
             </h1>
             <p className="r-page-sub">
               Started {startedAt}
               {isDemo && ' \u00b7 24 min elapsed \u00b7 est. 38 min remaining \u00b7 2\u00d74 design \u00b7 N=60 per cell \u00b7 seed 4719'}
               {!isDemo && ` \u00b7 ${cells.length} cells \u00b7 ${totalAll} total dyads`}
-              {!isDemo && runStatus !== 'running' && ` \u00b7 status: ${runStatus}`}
+              {!isDemo && experimentStatus !== 'running' && ` \u00b7 status: ${experimentStatus}`}
             </p>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0, alignItems: 'flex-end' }}>
@@ -427,12 +423,12 @@ export function RunDashboard({ runId, onInspectDyad }: RunDashboardProps) {
                 onClick={isDemo ? undefined : handlePause}
                 disabled={!isDemo && !isRunning}
               >
-                <Icon name="pause" size={13} /> {runStatus === 'paused' ? 'Resume' : 'Pause'}
+                <Icon name="pause" size={13} /> {experimentStatus === 'paused' ? 'Resume' : 'Pause'}
               </button>
               <button
                 className="r-btn r-btn-secondary"
                 onClick={isDemo ? undefined : handleAbort}
-                disabled={!isDemo && (runStatus === 'aborted' || runStatus === 'completed')}
+                disabled={!isDemo && (experimentStatus === 'aborted' || experimentStatus === 'completed')}
               >
                 <Icon name="stop" size={13} /> Abort
               </button>
@@ -572,6 +568,7 @@ export function RunDashboard({ runId, onInspectDyad }: RunDashboardProps) {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   {isRunning && <span className="pulse-dot" />}
                   <span style={{ fontSize: 11, color: 'var(--text-3)' }}>{isRunning ? 'Streaming' : 'Idle'}</span>
+
                 </div>
               </div>
               <div className="live-list">

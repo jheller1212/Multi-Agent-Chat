@@ -10,7 +10,7 @@ import type { ProviderType } from '../../types';
 interface ExperimentLauncherProps {
   scenarioId?: string;
   scenarioName?: string;
-  onLaunch?: (runId: string) => void;
+  onLaunch?: (experimentId: string) => void;
   onBack?: () => void;
 }
 
@@ -206,25 +206,25 @@ export function ExperimentLauncher({ scenarioId, scenarioName, onLaunch, onBack 
       const runner = new ExperimentRunner(experimentDef, scenario, apiKeys);
       runnerRef.current = runner;
 
-      // Register listener before calling start() to avoid race on 'run:started'
-      const runId = await new Promise<string>((resolve, reject) => {
+      // Register listener before calling start() to avoid race on 'experiment:started'
+      const launchedExperimentId = await new Promise<string>((resolve, reject) => {
         const off = runner.on(event => {
-          if (event.type === 'run:started') {
+          if (event.type === 'experiment:started') {
             off();
-            resolve(event.runId);
-          } else if (event.type === 'run:failed') {
+            resolve(event.experimentId);
+          } else if (event.type === 'experiment:failed') {
             off();
-            reject(new Error(event.error ?? 'Run failed to start'));
+            reject(new Error(event.error ?? 'Experiment failed to start'));
           }
         });
 
-        // start() creates the run row, emits 'run:started', then runs dyads
+        // start() updates the experiment row, emits 'experiment:started', then runs dyads
         runner.start().catch(err => {
           reject(err instanceof Error ? err : new Error(String(err)));
         });
       });
 
-      onLaunch?.(runId);
+      onLaunch?.(launchedExperimentId);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setLaunchError(`Launch error: ${message}`);

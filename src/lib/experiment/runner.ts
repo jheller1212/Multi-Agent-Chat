@@ -8,7 +8,7 @@ import { DomainAgent } from '../agents/domain-agent';
 import { ClassifierAgent } from '../agents/classifier';
 import { ExtractorAgent } from '../agents/extractor';
 import { enumerateCells, type CellDefinition } from './cell-enumerator';
-import { getRunProgress, updateRunProgress } from './progress';
+import { getExperimentProgress, updateExperimentProgress } from './progress';
 import { supabase } from '../supabase';
 
 // ---------------------------------------------------------------------------
@@ -16,11 +16,11 @@ import { supabase } from '../supabase';
 // ---------------------------------------------------------------------------
 
 export type RunnerEventType =
-  | 'run:started'
-  | 'run:completed'
-  | 'run:failed'
-  | 'run:paused'
-  | 'run:resumed'
+  | 'experiment:started'
+  | 'experiment:completed'
+  | 'experiment:failed'
+  | 'experiment:paused'
+  | 'experiment:resumed'
   | 'dyad:started'
   | 'dyad:completed'
   | 'dyad:failed'
@@ -29,7 +29,7 @@ export type RunnerEventType =
 
 export interface RunnerEvent {
   type: RunnerEventType;
-  runId: string;
+  experimentId: string;
   dyadId?: string;
   message?: TranscriptMessage;
   error?: string;
@@ -67,7 +67,6 @@ export class ExperimentRunner {
   private readonly apiKeys: Record<string, string>;
   private readonly concurrency: number;
 
-  private runId = '';
   private paused = false;
   private abortController: AbortController | null = null;
   private listeners: RunnerEventListener[] = [];
@@ -110,12 +109,12 @@ export class ExperimentRunner {
 
   pause(): void {
     this.paused = true;
-    this.emit({ type: 'run:paused', runId: this.runId });
+    this.emit({ type: 'experiment:paused', experimentId: this.experiment.id ?? '' });
   }
 
   resume(): void {
     this.paused = false;
-    this.emit({ type: 'run:resumed', runId: this.runId });
+    this.emit({ type: 'experiment:resumed', experimentId: this.experiment.id ?? '' });
   }
 
   abort(): void {
@@ -130,25 +129,23 @@ export class ExperimentRunner {
     this.abortController = new AbortController();
     this.paused = false;
 
-    // 1. Create experiment_run row
-    const { data: runRow, error: runError } = await supabase
-      .from('experiment_runs')
-      .insert({
-        experiment_id: this.experiment.id ?? crypto.randomUUID(),
+    const experimentId = this.experiment.id ?? crypto.randomUUID();
+
+    // 1. Update research_experiments row (experiment IS the run)
+    const { error: updateError } = await supabase
+      .from('research_experiments')
+      .update({
         status: 'running',
         config_snapshot: this.experiment,
         prompt_hashes: this.buildPromptHashes(),
         started_at: new Date().toISOString(),
         progress: { total: 0, completed: 0, failed: 0, excluded: 0 },
       })
-      .select('id')
-      .single();
+      .eq('id', experimentId);
 
-    if (runError || !runRow) {
-      throw new Error(`Failed to create experiment run: ${runError?.message ?? 'unknown'}`);
+    if (updateError) {
+      throw new Error(`Failed to start experiment: ${updateError.message}`);
     }
-
-    this.runId = runRow.id as string;
 
     // 2. Enumerate cells and create dyad records
     const cells = enumerateCells(this.experiment.factors);
@@ -157,7 +154,7 @@ export class ExperimentRunner {
     );
 
     const dyadInserts: Array<{
-      run_id: string;
+      experiment_id: string;
       cell_label: string;
       dyad_index: number;
       seed: number;
@@ -169,7 +166,7 @@ export class ExperimentRunner {
     for (const cell of cells) {
       for (let i = 0; i < nPerCell; i++) {
         dyadInserts.push({
-          run_id: this.runId,
+          experiment_id: experimentId,
           cell_label: cell.label,
           dyad_index: globalIndex,
           seed: globalIndex,
@@ -189,8 +186,8 @@ export class ExperimentRunner {
       throw new Error(`Failed to create dyad records: ${dyadError?.message ?? 'unknown'}`);
     }
 
-    // Update run progress
-    await updateRunProgress(this.runId, {
+    // Update experiment progress
+    await updateExperimentProgress(experimentId, {
       total: dyadRows.length,
       completed: 0,
       failed: 0,
@@ -200,8 +197,8 @@ export class ExperimentRunner {
     });
 
     this.emit({
-      type: 'run:started',
-      runId: this.runId,
+      type: 'experiment:started',
+      experimentId,
       progress: {
         total: dyadRows.length,
         completed: 0,
@@ -215,33 +212,32 @@ export class ExperimentRunner {
     const dyadIds = dyadRows.map(r => r.id as string);
 
     try {
-      await this.processDyads(dyadIds);
+      await this.processDyads(dyadIds, experimentId);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       await supabase
-        .from('experiment_runs')
+        .from('research_experiments')
         .update({ status: 'failed' })
-        .eq('id', this.runId);
-      this.emit({ type: 'run:failed', runId: this.runId, error: message });
+        .eq('id', experimentId);
+      this.emit({ type: 'experiment:failed', experimentId, error: message });
       throw err;
     }
 
-    // 4. Finalize run
-    const finalProgress = await getRunProgress(this.runId);
-    const finalStatus = finalProgress.failed > 0 ? 'completed' : 'completed';
+    // 4. Finalize experiment
+    const finalProgress = await getExperimentProgress(experimentId);
 
     await supabase
-      .from('experiment_runs')
+      .from('research_experiments')
       .update({
-        status: finalStatus,
+        status: 'completed',
         completed_at: new Date().toISOString(),
         progress: finalProgress,
       })
-      .eq('id', this.runId);
+      .eq('id', experimentId);
 
     this.emit({
-      type: 'run:completed',
-      runId: this.runId,
+      type: 'experiment:completed',
+      experimentId,
       progress: {
         total: finalProgress.total,
         completed: finalProgress.completed,
@@ -251,14 +247,14 @@ export class ExperimentRunner {
       },
     });
 
-    return this.runId;
+    return experimentId;
   }
 
   // -----------------------------------------------------------------------
   // Concurrency pool
   // -----------------------------------------------------------------------
 
-  private async processDyads(dyadIds: string[]): Promise<void> {
+  private async processDyads(dyadIds: string[], experimentId: string): Promise<void> {
     const queue = [...dyadIds];
     const active = new Set<Promise<void>>();
 
@@ -274,7 +270,7 @@ export class ExperimentRunner {
       // Fill up to concurrency limit
       while (active.size < this.concurrency && queue.length > 0) {
         const dyadId = queue.shift()!;
-        const task = this.runDyadWithRetry(dyadId).then(() => {
+        const task = this.runDyadWithRetry(dyadId, experimentId).then(() => {
           active.delete(task);
         });
         active.add(task);
@@ -286,11 +282,11 @@ export class ExperimentRunner {
       }
 
       // Sync progress to Supabase
-      const progress = await getRunProgress(this.runId);
-      await updateRunProgress(this.runId, progress);
+      const progress = await getExperimentProgress(experimentId);
+      await updateExperimentProgress(experimentId, progress);
       this.emit({
         type: 'progress',
-        runId: this.runId,
+        experimentId,
         progress: {
           total: progress.total,
           completed: progress.completed,
@@ -306,12 +302,12 @@ export class ExperimentRunner {
   // Retry wrapper
   // -----------------------------------------------------------------------
 
-  private async runDyadWithRetry(dyadId: string): Promise<void> {
+  private async runDyadWithRetry(dyadId: string, experimentId: string): Promise<void> {
     let lastError: Error | null = null;
 
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       try {
-        await this.runDyad(dyadId);
+        await this.runDyad(dyadId, experimentId);
         return;
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err));
@@ -334,7 +330,7 @@ export class ExperimentRunner {
 
     this.emit({
       type: 'dyad:failed',
-      runId: this.runId,
+      experimentId,
       dyadId,
       error: lastError?.message ?? 'unknown',
     });
@@ -344,7 +340,7 @@ export class ExperimentRunner {
   // runDyad()
   // -----------------------------------------------------------------------
 
-  async runDyad(dyadId: string): Promise<void> {
+  async runDyad(dyadId: string, experimentId: string): Promise<void> {
     // Fetch dyad record
     const { data: dyad, error: fetchError } = await supabase
       .from('dyads')
@@ -364,7 +360,7 @@ export class ExperimentRunner {
       .update({ status: 'running', started_at: new Date().toISOString() })
       .eq('id', dyadId);
 
-    this.emit({ type: 'dyad:started', runId: this.runId, dyadId });
+    this.emit({ type: 'dyad:started', experimentId, dyadId });
 
     // Build agent configs from experiment definition + cell factors
     const { agentConfigs, supervisorConfigs } = this.buildAgentConfigs(factors);
@@ -428,7 +424,7 @@ export class ExperimentRunner {
       onTurn: (message) => {
         this.emit({
           type: 'dyad:turn',
-          runId: this.runId,
+          experimentId,
           dyadId,
           message,
         });
@@ -495,7 +491,7 @@ export class ExperimentRunner {
     if (Object.keys(mergedOutcome).length > 0) {
       await supabase.from('outcome_records').insert({
         dyad_id: dyadId,
-        run_id: this.runId!,
+        experiment_id: experimentId,
         data: mergedOutcome,
       });
     }
@@ -511,7 +507,7 @@ export class ExperimentRunner {
       })
       .eq('id', dyadId);
 
-    this.emit({ type: 'dyad:completed', runId: this.runId, dyadId });
+    this.emit({ type: 'dyad:completed', experimentId, dyadId });
   }
 
   // -----------------------------------------------------------------------

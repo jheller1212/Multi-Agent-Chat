@@ -29,18 +29,18 @@ export interface FrozenPrompt {
 }
 
 /**
- * Freeze all rendered prompts for an experiment run.
+ * Freeze all rendered prompts for an experiment.
  * Writes immutable records to the frozen_prompts table.
- * Returns a map of "cellLabel_agentName" → hash for the run metadata.
+ * Returns a map of "cellLabel_agentName" → hash for the experiment metadata.
  */
 export async function freezePrompts(
-  runId: string,
+  experimentId: string,
   prompts: FrozenPrompt[],
 ): Promise<Record<string, string>> {
   const hashes: Record<string, string> = {};
 
   const rows = prompts.map(p => ({
-    run_id: runId,
+    experiment_id: experimentId,
     cell_label: p.cellLabel,
     agent_name: p.agentName,
     content: p.content,
@@ -60,16 +60,16 @@ export async function freezePrompts(
 }
 
 /**
- * Load frozen prompts for a specific run and cell.
+ * Load frozen prompts for a specific experiment and cell.
  */
 export async function loadFrozenPrompts(
-  runId: string,
+  experimentId: string,
   cellLabel: string,
 ): Promise<Record<string, string>> {
   const { data, error } = await supabase
     .from('frozen_prompts')
     .select('agent_name, content')
-    .eq('run_id', runId)
+    .eq('experiment_id', experimentId)
     .eq('cell_label', cellLabel);
 
   if (error || !data) return {};

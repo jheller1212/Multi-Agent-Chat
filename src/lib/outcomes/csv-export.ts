@@ -1,15 +1,14 @@
 import { supabase } from '../supabase';
 
 /**
- * Export outcome records for a run as CSV string.
- * Joins outcome_records → dyads to filter by run_id.
+ * Export outcome records for an experiment as CSV string.
  */
-export async function exportRunCSV(runId: string): Promise<string> {
-  // Fetch dyad ids for this run first, then fetch outcome records
+export async function exportExperimentCSV(experimentId: string): Promise<string> {
+  // Fetch dyad ids for this experiment first, then fetch outcome records
   const { data: dyadRows, error: dyadError } = await supabase
     .from('dyads')
     .select('id')
-    .eq('run_id', runId);
+    .eq('experiment_id', experimentId);
 
   if (dyadError || !dyadRows || dyadRows.length === 0) {
     return '';
