@@ -129,15 +129,6 @@ function Topbar({ breadcrumb, onSignOut }: { breadcrumb: string[]; onSignOut?: (
           <Icon name="help" size={14} /> Docs
         </a>
         <button
-          className="flex items-center justify-center cursor-pointer"
-          style={{
-            width: 32, height: 32, borderRadius: 6,
-            background: 'transparent', border: 0, color: 'var(--text-2)',
-          }}
-        >
-          <Icon name="bell" />
-        </button>
-        <button
           onClick={toggleTheme}
           className="flex items-center justify-center cursor-pointer"
           style={{
