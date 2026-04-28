@@ -507,15 +507,11 @@ export function TranscriptViewer({ dyadId, onNavigateDyad, onBack }: TranscriptV
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-3)' }}>
-              <a
-                href="#"
-                style={{ color: 'var(--accent-2)', textDecoration: 'none' }}
-                onClick={(e) => { e.preventDefault(); onBack?.(); }}
-              >
+              <span style={{ color: 'var(--text-3)' }}>
                 {isDemo ? 'Experiment #14' : `Experiment ${dyad?.experiment_id?.slice(0, 8) ?? ''}`}
-              </a>
+              </span>
               <Icon name="chevron" size={12} />
-              <a href="#" style={{ color: 'var(--accent-2)', textDecoration: 'none' }}>Cell {cellLabel}</a>
+              <span style={{ color: 'var(--text-3)' }}>Cell {cellLabel}</span>
               <Icon name="chevron" size={12} />
               <span style={{ fontFamily: 'var(--font-mono)' }}>{displayDyadId}</span>
             </div>

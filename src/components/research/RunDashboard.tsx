@@ -395,9 +395,9 @@ export function RunDashboard({ experimentId, onInspectDyad, onDuplicate }: RunDa
                 marginBottom: 6,
               }}
             >
-              <a href="#" style={{ color: 'var(--text-3)', textDecoration: 'none' }}>
+              <span style={{ color: 'var(--text-3)' }}>
                 Experiments
-              </a>
+              </span>
               <Icon name="chevron" size={12} />
               <span style={{ color: 'var(--text-1)' }}>{isDemo ? 'Buyer Capability \u00d7 Provider' : experimentName}</span>
             </div>
@@ -591,7 +591,6 @@ export function RunDashboard({ experimentId, onInspectDyad, onDuplicate }: RunDa
                   )}
               </div>
               <div className="live-foot">
-                <a href="#">View full log &rarr;</a>
               </div>
             </div>
 
@@ -599,9 +598,6 @@ export function RunDashboard({ experimentId, onInspectDyad, onDuplicate }: RunDa
             <div className="run-side-card">
               <div className="rsc-head">
                 <h3 className="rsc-h">Anomalies ({totalAnom})</h3>
-                <a href="#" style={{ fontSize: 11 }}>
-                  Triage all &rarr;
-                </a>
               </div>
               <div className="anom-list">
                 {anomalies.length > 0

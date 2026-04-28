@@ -734,7 +734,6 @@ function AgentsPane({ agents, onChange }: AgentsPaneProps) {
           </p>
           <p style={{ margin: 0 }}>
             Most scenarios run with 2 domain + 2 supervisor agents.
-            <a href="#" style={{ color: 'var(--accent-2)', marginLeft: 4 }}>See the protocol guide &rarr;</a>
           </p>
         </AsideCard>
 
@@ -1650,7 +1649,7 @@ export function ScenarioBuilder({ scenarioId, onUseInExperiment }: ScenarioBuild
                 fontSize: 12, color: 'var(--text-3)',
               }}
             >
-              <a href="#" style={{ color: 'var(--text-3)', textDecoration: 'none' }}>Scenarios</a>
+              <span style={{ color: 'var(--text-3)' }}>Scenarios</span>
               <Icon name="chevron" size={12} />
               <span style={{ color: 'var(--text-1)', fontWeight: 500 }}>{scenarioName}</span>
               {scenario?.isTemplate && <span className="r-chip r-chip-grey">Template</span>}

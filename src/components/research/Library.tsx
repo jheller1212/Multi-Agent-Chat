@@ -583,15 +583,6 @@ export function Library({ onEditScenario, onCloneScenario, onNewScenario, onView
               >
                 Your scenarios
               </h2>
-              <a
-                href="#"
-                style={{
-                  fontSize: 12, color: 'var(--accent-2)',
-                  textDecoration: 'none',
-                }}
-              >
-                View all →
-              </a>
             </div>
             <div
               style={{
