@@ -409,6 +409,14 @@ export function ResearchLayout({ onBack }: ResearchLayoutProps) {
   const [showTour, setShowTour] = useState<boolean>(
     () => !localStorage.getItem('mac_tour_completed'),
   );
+  const [currentUser, setCurrentUser] = useState<{ email?: string } | undefined>(undefined);
+
+  useEffect(() => {
+    void (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) setCurrentUser({ email: user.email ?? undefined });
+    })();
+  }, []);
 
   const handleSignOut = async () => {
     clearVault();
@@ -502,6 +510,7 @@ export function ResearchLayout({ onBack }: ResearchLayoutProps) {
       onNavClick={handleNavClick}
       onSignOut={handleSignOut}
       onTakeTour={() => setShowTour(true)}
+      user={currentUser}
     >
       {screen === 'library' && (
         <Library

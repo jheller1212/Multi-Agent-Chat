@@ -8,6 +8,7 @@ interface ResearchShellProps {
   onNavClick?: (page: string) => void;
   onSignOut?: () => void;
   onTakeTour?: () => void;
+  user?: { email?: string };
 }
 
 function BrandMark() {
@@ -42,7 +43,7 @@ function BrandMark() {
   );
 }
 
-function Topbar({ breadcrumb, onSignOut }: { breadcrumb: string[]; onSignOut?: () => void }) {
+function Topbar({ breadcrumb, onSignOut, user }: { breadcrumb: string[]; onSignOut?: () => void; user?: { email?: string } }) {
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const stored = localStorage.getItem('mac_theme');
     return stored === 'dark' ? 'dark' : 'light';
@@ -156,9 +157,13 @@ function Topbar({ breadcrumb, onSignOut }: { breadcrumb: string[]; onSignOut?: (
               fontFamily: 'var(--font-h)',
             }}
           >
-            JH
+            {user?.email
+              ? user.email.split('@')[0].split(/[._-]/).filter(Boolean).slice(0, 2).map(p => p[0]?.toUpperCase()).join('')
+              : '?'}
           </div>
-          jonasheller89
+          {user?.email
+            ? (user.email.length > 20 ? `${user.email.slice(0, 18)}…` : user.email)
+            : ''}
         </div>
         {onSignOut && (
           <button
@@ -292,7 +297,7 @@ function Sidebar({ activePage, onNavClick, onTakeTour }: { activePage: string; o
   );
 }
 
-export function ResearchShell({ activePage, breadcrumb, children, onNavClick, onSignOut, onTakeTour }: ResearchShellProps) {
+export function ResearchShell({ activePage, breadcrumb, children, onNavClick, onSignOut, onTakeTour, user }: ResearchShellProps) {
   return (
     <div
       data-density="compact"
@@ -307,7 +312,7 @@ export function ResearchShell({ activePage, breadcrumb, children, onNavClick, on
         fontSize: 'var(--d-fs-body)',
       }}
     >
-      <Topbar breadcrumb={breadcrumb} onSignOut={onSignOut} />
+      <Topbar breadcrumb={breadcrumb} onSignOut={onSignOut} user={user} />
       <Sidebar activePage={activePage} onNavClick={onNavClick} onTakeTour={onTakeTour} />
       <div style={{ gridColumn: 2, gridRow: 2, overflow: 'auto', position: 'relative' }}>
         {children}

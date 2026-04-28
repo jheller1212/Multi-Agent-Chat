@@ -411,6 +411,7 @@ interface LibraryProps {
 
 export function Library({ onEditScenario, onCloneScenario, onNewScenario, onViewRuns }: LibraryProps) {
   const [filter, setFilter] = useState<string>('All domains');
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [templateCards, setTemplateCards] = useState<MockScenario[]>(MOCK_SCENARIOS);
   const [yourCards, setYourCards] = useState<MockYourScenario[]>(MOCK_YOUR_SCENARIOS);
@@ -438,29 +439,17 @@ export function Library({ onEditScenario, onCloneScenario, onNewScenario, onView
       }
 
       const scenarios = await loadScenarios();
-      if (scenarios.length === 0) {
-        // Fallback to mock data if DB is empty
-        setTemplateCards(MOCK_SCENARIOS);
-        setYourCards(MOCK_YOUR_SCENARIOS);
-      } else {
-        const templates = scenarios.filter(s => s.isTemplate);
-        const userScenarios = scenarios.filter(s => !s.isTemplate);
+      const templates = scenarios.filter(s => s.isTemplate);
+      const userScenarios = scenarios.filter(s => !s.isTemplate);
 
-        setTemplateCards(
-          templates.length > 0
-            ? templates.map(scenarioToCard)
-            : MOCK_SCENARIOS,
-        );
-        setYourCards(
-          userScenarios.length > 0
-            ? userScenarios.map(scenarioToYourCard)
-            : MOCK_YOUR_SCENARIOS,
-        );
-      }
+      setTemplateCards(templates.length > 0 ? templates.map(scenarioToCard) : MOCK_SCENARIOS);
+      // Authenticated users see their real scenarios (empty array = empty state)
+      setYourCards(userScenarios.map(scenarioToYourCard));
     } catch (err) {
       console.warn('[Library] Failed to load scenarios:', err);
       setTemplateCards(MOCK_SCENARIOS);
-      setYourCards(MOCK_YOUR_SCENARIOS);
+      // Don't show mock user scenarios on error for authenticated users
+      if (!isAuthenticated) setYourCards(MOCK_YOUR_SCENARIOS);
     } finally {
       setLoading(false);
     }
@@ -483,7 +472,16 @@ export function Library({ onEditScenario, onCloneScenario, onNewScenario, onView
     }
   }, [isAuthenticated, onCloneScenario, fetchScenarios]);
 
-  const visible = filter === 'All domains' ? templateCards : templateCards.filter((s) => s.domain === filter);
+  const lowerQuery = searchQuery.toLowerCase().trim();
+  const domainFiltered = filter === 'All domains' ? templateCards : templateCards.filter((s) => s.domain === filter);
+  const visible = lowerQuery
+    ? domainFiltered.filter((s) =>
+        s.title.toLowerCase().includes(lowerQuery) ||
+        s.blurb.toLowerCase().includes(lowerQuery) ||
+        s.domain.toLowerCase().includes(lowerQuery) ||
+        s.tags.some((t) => t.toLowerCase().includes(lowerQuery))
+      )
+    : domainFiltered;
   const featured = visible.filter((s) => s.featured);
   const more = visible.filter((s) => !s.featured);
 
@@ -529,6 +527,8 @@ export function Library({ onEditScenario, onCloneScenario, onNewScenario, onView
             <input
               type="text"
               placeholder="Search templates by name, domain, or tag\u2026"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               style={{
                 border: 0, padding: '9px 0', background: 'transparent',
                 fontSize: 13, flex: 1, outline: 'none',
@@ -584,17 +584,28 @@ export function Library({ onEditScenario, onCloneScenario, onNewScenario, onView
                 Your scenarios
               </h2>
             </div>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-                gap: 10, marginBottom: 8,
-              }}
-            >
-              {yourCards.map((y) => (
-                <YourCard key={y.id} y={y} onEdit={onEditScenario} onRun={onViewRuns} />
-              ))}
-            </div>
+            {yourCards.length === 0 && isAuthenticated ? (
+              <div
+                style={{
+                  padding: '20px 0 8px',
+                  fontSize: 13, color: 'var(--text-3)',
+                }}
+              >
+                No scenarios yet. Clone a template below to get started.
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+                  gap: 10, marginBottom: 8,
+                }}
+              >
+                {yourCards.map((y) => (
+                  <YourCard key={y.id} y={y} onEdit={onEditScenario} onRun={onViewRuns} />
+                ))}
+              </div>
+            )}
 
             {/* Featured templates */}
             {featured.length > 0 && (

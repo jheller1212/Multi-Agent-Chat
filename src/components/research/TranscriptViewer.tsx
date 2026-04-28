@@ -144,7 +144,7 @@ const offerPillStyle: React.CSSProperties = {
   fontWeight: 600,
 };
 
-function TurnBubble({ t }: { t: Turn }) {
+function TurnBubble({ t, showOffers }: { t: Turn; showOffers: boolean }) {
   const isBuyer = t.agent === 'buyer';
   const hasAccept = t.text.includes('[ACCEPT]');
   const bodyText = hasAccept ? t.text.replace(/\[ACCEPT\]/g, '').trim() : t.text;
@@ -218,7 +218,7 @@ function TurnBubble({ t }: { t: Turn }) {
             </span>
           )}
         </div>
-        {t.offer && (
+        {showOffers && t.offer && (
           <div
             style={{
               display: 'flex',
@@ -246,9 +246,10 @@ function TurnBubble({ t }: { t: Turn }) {
 
 interface LiveTurnBubbleProps {
   msg: TranscriptMessageRow;
+  showTokens: boolean;
 }
 
-function LiveTurnBubble({ msg }: LiveTurnBubbleProps) {
+function LiveTurnBubble({ msg, showTokens }: LiveTurnBubbleProps) {
   const col = agentColor(msg.agent_name);
   const isLeft = col === 'blue';
   const hasAccept = msg.content.includes('[ACCEPT]');
@@ -326,7 +327,7 @@ function LiveTurnBubble({ msg }: LiveTurnBubbleProps) {
             </span>
           )}
         </div>
-        {msg.token_usage && (
+        {showTokens && msg.token_usage && (
           <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px dashed var(--line-1)', fontSize: 10.5, color: 'var(--text-4)' }}>
             {msg.token_usage.total_tokens != null && `${msg.token_usage.total_tokens} tokens`}
             {msg.time_taken_ms != null && ` \u00b7 ${msg.time_taken_ms}ms`}
@@ -428,6 +429,9 @@ export function TranscriptViewer({ dyadId, onNavigateDyad, onBack }: TranscriptV
   const [messages, setMessages] = useState<TranscriptMessageRow[]>([]);
   const [supervisorOutputs, setSupervisorOutputs] = useState<SupervisorOutputRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [showOffers, setShowOffers] = useState(true);
+  const [showTokens, setShowTokens] = useState(false);
+  const [hideSystem, setHideSystem] = useState(false);
 
   const handleExportJSON = useCallback(async () => {
     if (!dyadId) return;
@@ -772,9 +776,14 @@ export function TranscriptViewer({ dyadId, onNavigateDyad, onBack }: TranscriptV
               Transcript
             </h3>
             <div style={{ display: 'flex', gap: 6 }}>
-              {['Show offers', 'Tokens', 'Hide system'].map((label) => (
+              {([
+                { label: 'Show offers', active: showOffers, toggle: () => setShowOffers(v => !v) },
+                { label: 'Tokens', active: showTokens, toggle: () => setShowTokens(v => !v) },
+                { label: 'Hide system', active: hideSystem, toggle: () => setHideSystem(v => !v) },
+              ] as const).map(({ label, active, toggle }) => (
                 <button
                   key={label}
+                  onClick={toggle}
                   style={{
                     cursor: 'pointer',
                     display: 'inline-flex',
@@ -786,8 +795,8 @@ export function TranscriptViewer({ dyadId, onNavigateDyad, onBack }: TranscriptV
                     padding: '3px 9px',
                     borderRadius: 'var(--radius-pill)',
                     border: 'none',
-                    background: label === 'Show offers' ? 'var(--accent-2-soft)' : 'var(--surface-sunken)',
-                    color: label === 'Show offers' ? 'var(--accent-2)' : 'var(--text-3)',
+                    background: active ? 'var(--accent-2-soft)' : 'var(--surface-sunken)',
+                    color: active ? 'var(--accent-2)' : 'var(--text-3)',
                   }}
                 >
                   {label}
@@ -798,29 +807,31 @@ export function TranscriptViewer({ dyadId, onNavigateDyad, onBack }: TranscriptV
 
           <div style={{ flex: 1, overflow: 'auto', padding: '24px 24px 40px', display: 'flex', flexDirection: 'column', gap: 14 }}>
             {/* System top */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                fontSize: 11.5,
-                color: 'var(--text-3)',
-                background: 'var(--surface-panel)',
-                border: '1px dashed var(--line-2)',
-                borderRadius: 6,
-                padding: '8px 14px',
-                alignSelf: 'center',
-                maxWidth: '80%',
-              }}
-            >
-              <Icon name="settings" size={12} /> System turn \u2014 seed {seed} \u00b7 factors bound
-            </div>
+            {!hideSystem && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  fontSize: 11.5,
+                  color: 'var(--text-3)',
+                  background: 'var(--surface-panel)',
+                  border: '1px dashed var(--line-2)',
+                  borderRadius: 6,
+                  padding: '8px 14px',
+                  alignSelf: 'center',
+                  maxWidth: '80%',
+                }}
+              >
+                <Icon name="settings" size={12} /> System turn \u2014 seed {seed} \u00b7 factors bound
+              </div>
+            )}
 
             {isDemo
               ? MOCK_TURNS.map((t, i) => (
                 <React.Fragment key={i}>
                   {i > 0 && t.round !== MOCK_TURNS[i - 1].round && <RoundDivider round={t.round} />}
-                  <TurnBubble t={t} />
+                  <TurnBubble t={t} showOffers={showOffers} />
                 </React.Fragment>
               ))
               : messages.length === 0
@@ -834,7 +845,7 @@ export function TranscriptViewer({ dyadId, onNavigateDyad, onBack }: TranscriptV
                   {i > 0 && m.turn !== messages[i - 1].turn + 1 && messages[i - 1].agent_name === m.agent_name && (
                     <RoundDivider round={m.turn} />
                   )}
-                  <LiveTurnBubble msg={m} />
+                  <LiveTurnBubble msg={m} showTokens={showTokens} />
                 </React.Fragment>
               ))
             }

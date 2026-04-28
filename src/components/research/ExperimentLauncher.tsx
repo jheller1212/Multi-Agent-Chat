@@ -228,7 +228,6 @@ export function ExperimentLauncher({ scenarioId, scenarioName, onLaunch, onBack 
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setLaunchError(`Launch error: ${message}`);
-      console.error('Launch error:', err);
       setLaunching(false);
     }
   };
