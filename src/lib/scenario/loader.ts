@@ -155,6 +155,10 @@ export async function cloneScenario(scenarioId: string): Promise<Scenario | null
  * Called once when the app initialises. Skips if templates already exist.
  */
 export async function seedScenarioTemplates(): Promise<void> {
+  // Only seed if user is authenticated (RLS requires user_id)
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
   const { count } = await supabase
     .from('scenarios')
     .select('*', { count: 'exact', head: true })
