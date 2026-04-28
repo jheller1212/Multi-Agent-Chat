@@ -388,7 +388,15 @@ export class ExperimentRunner {
       },
       runSupervisor: async (supervisorDef, config, transcript, signal) => {
         if (this.experiment.devMode) {
-          // In devMode, skip real supervisor calls — return a pass-through output
+          // In devMode, skip real supervisor calls.
+          // For classifiers: check transcript for termination keywords → return ACCEPTANCE.
+          let classification = 'CONTINUE';
+          if (supervisorDef.type === 'classifier' || supervisorDef.type === 'appraiser') {
+            const lastMessages = transcript.slice(-2);
+            if (lastMessages.some(m => containsTerminationKeyword(m.content))) {
+              classification = 'ACCEPTANCE';
+            }
+          }
           return {
             afterTurn: transcript.length,
             supervisorName: supervisorDef.name,
@@ -396,9 +404,9 @@ export class ExperimentRunner {
               ? 'classification'
               : 'extraction',
             parsed: supervisorDef.type === 'classifier' || supervisorDef.type === 'appraiser'
-              ? { classification: 'CONTINUE' }
+              ? { classification }
               : {},
-            rawResponse: '[devMode: skipped]',
+            rawResponse: `[devMode: ${classification}]`,
           } satisfies SupervisorOutput;
         }
 
