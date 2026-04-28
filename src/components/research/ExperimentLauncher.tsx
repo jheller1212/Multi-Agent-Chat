@@ -55,9 +55,18 @@ export function ExperimentLauncher({ scenarioId, scenarioName, onLaunch, onBack 
   const [launchError, setLaunchError] = useState<string | null>(null);
   const runnerRef = useRef<ExperimentRunner | null>(null);
 
-  // Model selection
-  const [selectedProvider, setSelectedProvider] = useState<string>('openai');
-  const [selectedModel, setSelectedModel] = useState<string>('gpt-4o');
+  // Model selection — default to first provider with a key
+  const initialVault = loadVault();
+  const VAULT_KEY_MAP_INIT: Record<string, keyof ProviderVault> = {
+    openai: 'gpt4', anthropic: 'claude', google: 'gemini', mistral: 'mistral', meta: 'meta', alibaba: 'alibaba',
+  };
+  const defaultProvider = PROVIDER_OPTIONS.find(p => initialVault[VAULT_KEY_MAP_INIT[p.value] ?? 'gpt4'].length > 0)?.value ?? 'openai';
+
+  const [selectedProvider, setSelectedProvider] = useState<string>(defaultProvider);
+  const [selectedModel, setSelectedModel] = useState<string>(() => {
+    const MODEL_OPTIONS_INIT: Record<string, string> = { openai: 'gpt-4o', anthropic: 'claude-sonnet-4-6', google: 'gemini-1.5-pro', mistral: 'mistral-large-latest', meta: 'llama-3.1-8b-instruct', alibaba: 'qwen-2.5-7b-instruct' };
+    return MODEL_OPTIONS_INIT[defaultProvider] ?? 'gpt-4o';
+  });
 
   const MODEL_OPTIONS: Record<string, Array<{ id: string; label: string }>> = {
     openai: [{ id: 'gpt-4o', label: 'GPT-4o' }, { id: 'gpt-4o-mini', label: 'GPT-4o Mini' }, { id: 'gpt-4.1', label: 'GPT-4.1' }],
@@ -471,7 +480,7 @@ export function ExperimentLauncher({ scenarioId, scenarioName, onLaunch, onBack 
           const checks: Array<{ label: string; ok: boolean; detail: string; tooltip: string; action?: () => void; actionLabel?: string }> = [
             { label: 'Experiment name', ok: hasName, detail: hasName ? name : 'Enter a name above', tooltip: 'Give your experiment a descriptive name so you can identify it later in the Results tab. E.g., "Capability asymmetry — pilot run".' },
             { label: 'Scenario selected', ok: hasScenario, detail: hasScenario ? `ID: ${scenarioId?.slice(0, 8)}...` : 'Go back and select a scenario first', tooltip: 'A scenario defines the agents, prompts, turn-taking policy, and outcome schema. Clone one from the Library or create a blank scenario first.' },
-            { label: 'API key for selected provider', ok: hasKeyForProvider, detail: hasKeyForProvider ? `${PROVIDER_OPTIONS.find(p => p.value === selectedProvider)?.label} key configured` : `No key for ${PROVIDER_OPTIONS.find(p => p.value === selectedProvider)?.label ?? selectedProvider}${hasAnyKey ? ` (you have keys for: ${configuredProviders.map(p => p.label).join(', ')})` : ''}`, tooltip: 'You need an API key for the provider you selected above. The key is stored encrypted in your browser. Get one from the provider\'s developer console (e.g., platform.openai.com/api-keys for OpenAI, console.anthropic.com for Anthropic).', action: () => setShowKeyInput(true), actionLabel: 'Add key' },
+            { label: 'API key for selected provider', ok: hasKeyForProvider, detail: hasKeyForProvider ? `${PROVIDER_OPTIONS.find(p => p.value === selectedProvider)?.label} key configured${configuredProviders.length > 1 ? ` (also: ${configuredProviders.filter(p => p.value !== selectedProvider).map(p => p.label).join(', ')})` : ''}` : `No key for ${PROVIDER_OPTIONS.find(p => p.value === selectedProvider)?.label ?? selectedProvider}${hasAnyKey ? `. Switch to: ${configuredProviders.map(p => p.label).join(', ')}` : ''}`, tooltip: 'You need an API key for the provider you selected above. The key is stored encrypted in your browser. Get one from the provider\'s developer console (e.g., platform.openai.com/api-keys for OpenAI, console.anthropic.com for Anthropic).', action: hasAnyKey && !hasKeyForProvider ? () => { const first = configuredProviders[0]; if (first) setSelectedProvider(first.value); } : () => setShowKeyInput(true), actionLabel: hasAnyKey && !hasKeyForProvider ? `Switch to ${configuredProviders[0]?.label}` : 'Add key' },
             { label: 'Factors defined', ok: hasFactors, detail: hasFactors ? `${factors.length} factor(s), ${cellCount} cells` : 'Each factor needs at least 2 levels', tooltip: 'Factors are the independent variables in your experiment. Each factor has levels (e.g., "capability: strong, weak"). The platform cross-joins all factors to create cells. Each cell gets N dyads.' },
             { label: 'N per cell', ok: nReasonable, detail: nReasonable ? `${nPerCell} dyads × ${cellCount} cells = ${totalDyads} total` : 'Must be between 1 and 500', tooltip: 'How many agent-to-agent conversations to run per experimental cell. Higher N = more statistical power but more API cost. Start with 2–4 for testing, 50–150 for production.' },
             { label: 'Concurrency', ok: concurrencyOk, detail: concurrencyOk ? `${concurrency} parallel dyads` : 'Must be between 1 and 20', tooltip: 'How many dyads run simultaneously. Higher = faster but more API rate-limit risk. 5 is a safe default. Reduce to 1–2 if you hit rate limits.' },

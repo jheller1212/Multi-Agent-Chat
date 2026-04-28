@@ -255,13 +255,14 @@ function AsideHeader({ icon, children, warn }: { icon: string; children: ReactNo
 interface AgentCardProps {
   a: Agent;
   isEditing: boolean;
+  prompt: string;
   onEdit: (id: string) => void;
   onCopy: (id: string) => void;
   onRemove: (id: string) => void;
   onAgentChange: (updated: Agent) => void;
 }
 
-function AgentCard({ a, isEditing, onEdit, onCopy, onRemove, onAgentChange }: AgentCardProps) {
+function AgentCard({ a, isEditing, prompt, onEdit, onCopy, onRemove, onAgentChange }: AgentCardProps) {
   const avatarBg = a.color === 'blue' ? 'var(--accent-2-soft)'
     : a.color === 'orange' ? 'var(--accent-1-soft)'
     : 'var(--surface-sunken)';
@@ -271,10 +272,9 @@ function AgentCard({ a, isEditing, onEdit, onCopy, onRemove, onAgentChange }: Ag
 
   const providerColor = PROVIDERS[a.provider]?.color ?? 'var(--text-3)';
 
-  const promptInfo = a.id === 'buyer' ? '212 tokens · 5 slots'
-    : a.id === 'seller' ? '198 tokens · 4 slots'
-    : a.id === 'judge' ? '84 tokens · 0 slots'
-    : '146 tokens · 1 slot';
+  const tokenCount = Math.round(prompt.length / 4);
+  const slotCount = (prompt.match(/\{[A-Z_]+\}/g) ?? []).length;
+  const promptInfo = `${tokenCount} tokens · ${slotCount} slot${slotCount === 1 ? '' : 's'}`;
 
   const inputStyle: React.CSSProperties = {
     padding: '5px 8px', borderRadius: 5,
@@ -649,10 +649,11 @@ const UTILITY_OPTIONS: UtilOption[] = [
 
 interface AgentsPaneProps {
   agents: Agent[];
+  prompts: Record<string, string>;
   onChange: (agents: Agent[]) => void;
 }
 
-function AgentsPane({ agents, onChange }: AgentsPaneProps) {
+function AgentsPane({ agents, prompts, onChange }: AgentsPaneProps) {
   const [editingAgentId, setEditingAgentId] = useState<string | null>(null);
 
   const addAgent = (role: 'domain' | 'supervisor') => {
@@ -711,6 +712,7 @@ function AgentsPane({ agents, onChange }: AgentsPaneProps) {
               key={a.id}
               a={a}
               isEditing={editingAgentId === a.id}
+              prompt={prompts[a.id] ?? ''}
               onEdit={handleEdit}
               onCopy={handleCopy}
               onRemove={handleRemove}
@@ -1707,6 +1709,7 @@ export function ScenarioBuilder({ scenarioId, onUseInExperiment }: ScenarioBuild
         {tab === 'agents' && (
           <AgentsPane
             agents={agents}
+            prompts={prompts}
             onChange={setAgents}
           />
         )}
