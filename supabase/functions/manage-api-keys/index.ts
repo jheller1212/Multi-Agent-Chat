@@ -4,6 +4,7 @@ const ALLOWED_ORIGINS = [
   'https://ai2aichat.com',
   'https://www.ai2aichat.com',
   'https://ai2ai-chat.netlify.app',
+  'https://multi-agent-chat-research.netlify.app',
 ];
 
 function getCorsHeaders(req: Request) {
