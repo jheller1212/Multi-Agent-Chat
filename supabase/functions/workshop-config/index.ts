@@ -1,6 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const SUPER_ADMIN = 'jonasheller89@gmail.com';
+const SUPER_ADMIN = Deno.env.get('SUPER_ADMIN_EMAIL') || '';
 
 const ALLOWED_ORIGINS = [
   'https://ai2aichat.com',
@@ -155,19 +155,11 @@ Deno.serve(async (req) => {
         return jsonResponse({ error: 'Workshop not found' }, 404, corsHeaders);
       }
 
-      const cryptoKey = await deriveKey(encryptionSecret, `workshop-${data.id}`);
-      let apiKey: string;
-      try {
-        apiKey = await decrypt(cryptoKey, data.api_key);
-      } catch {
-        return jsonResponse({ error: 'Failed to decrypt workshop key' }, 500, corsHeaders);
-      }
-
       return jsonResponse({
         name: data.name,
         welcome: data.welcome,
         provider: data.provider,
-        apiKey,
+        hasKey: !!data.api_key,
         scenario: data.scenario,
         config: data.config,
       }, 200, corsHeaders);
