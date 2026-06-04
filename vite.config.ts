@@ -10,7 +10,7 @@ export default defineConfig({
     exclude: ['lucide-react'],
   },
   build: {
-    sourcemap: true,
+    sourcemap: false,
   },
   test: {
     environment: 'jsdom',
