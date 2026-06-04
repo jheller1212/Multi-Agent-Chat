@@ -75,7 +75,7 @@ export function ConversationDisplay({
   const hasMultipleReps = convIdToRepNum.size > 1;
 
   return (
-    <div className="flex flex-col gap-2.5">
+    <div className="flex flex-col gap-2.5" aria-live="polite" aria-label="Conversation messages">
       {visible.map((message, idx) => {
         const isUser = message.role === 'user';
         const isBot1 = message.role === 'assistant' && message.botIndex === 1;

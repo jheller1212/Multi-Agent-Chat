@@ -136,7 +136,7 @@ function TourContent({
       )}
 
       <div>
-        <h3 className="font-semibold text-gray-900 dark:text-white text-base leading-snug">{title}</h3>
+        <h3 id="tour-step-title" className="font-semibold text-gray-900 dark:text-white text-base leading-snug">{title}</h3>
         <p className="text-sm text-gray-600 dark:text-gray-300 mt-1.5 leading-relaxed">{description}</p>
       </div>
 
@@ -360,7 +360,12 @@ export function OnboardingTour({ onComplete }: OnboardingTourProps) {
       {/* Centered modal for null-target steps */}
       {isModal && !measuring && (
         <div className="fixed inset-0 z-[1002] flex items-center justify-center p-4 pointer-events-none">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-100 dark:border-gray-700 p-8 max-w-sm w-full space-y-4 pointer-events-auto">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="tour-step-title"
+            className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-100 dark:border-gray-700 p-8 max-w-sm w-full space-y-4 pointer-events-auto"
+          >
             <TourContent {...contentProps} />
           </div>
         </div>
