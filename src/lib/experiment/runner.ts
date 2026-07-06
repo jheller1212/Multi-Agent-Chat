@@ -1,6 +1,6 @@
 import type { AgentConfig, TranscriptMessage, SupervisorOutput } from '../../types/agents';
 import type { ExperimentDefinition, DyadRecord } from '../../types/experiment';
-import type { Scenario, SupervisorDefinition } from '../../types/scenario';
+import type { Scenario } from '../../types/scenario';
 import type { ProviderType } from '../../types';
 import type { OrchestratorResult } from '../orchestrator/orchestrator';
 import { ConversationOrchestrator } from '../orchestrator/orchestrator';
@@ -8,6 +8,7 @@ import { DomainAgent } from '../agents/domain-agent';
 import { ClassifierAgent } from '../agents/classifier';
 import { ExtractorAgent } from '../agents/extractor';
 import { enumerateCells, type CellDefinition } from './cell-enumerator';
+import { extractAllowedValues, extractExpectedKeys } from './schema-utils';
 import { getExperimentProgress, updateExperimentProgress } from './progress';
 import { supabase } from '../supabase';
 
@@ -215,10 +216,13 @@ export class ExperimentRunner {
       await this.processDyads(dyadIds, experimentId);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      await supabase
+      const { error: failError } = await supabase
         .from('research_experiments')
         .update({ status: 'failed' })
         .eq('id', experimentId);
+      if (failError) {
+        console.error(`[Runner] Failed to mark experiment ${experimentId} as failed:`, failError.message);
+      }
       this.emit({ type: 'experiment:failed', experimentId, error: message });
       throw err;
     }
@@ -226,7 +230,7 @@ export class ExperimentRunner {
     // 4. Finalize experiment
     const finalProgress = await getExperimentProgress(experimentId);
 
-    await supabase
+    const { error: completeError } = await supabase
       .from('research_experiments')
       .update({
         status: 'completed',
@@ -234,6 +238,12 @@ export class ExperimentRunner {
         progress: finalProgress,
       })
       .eq('id', experimentId);
+
+    if (completeError) {
+      console.error(`[Runner] Failed to mark experiment ${experimentId} as completed:`, completeError.message);
+      this.emit({ type: 'experiment:failed', experimentId, error: `Failed to mark experiment as completed: ${completeError.message}` });
+      throw new Error(`Failed to mark experiment as completed: ${completeError.message}`);
+    }
 
     this.emit({
       type: 'experiment:completed',
@@ -320,13 +330,17 @@ export class ExperimentRunner {
     }
 
     // Mark dyad as permanently failed
-    await supabase
+    const { error: failUpdateError } = await supabase
       .from('dyads')
       .update({
         status: 'failed',
         failure_reason: lastError?.message ?? 'unknown',
       })
       .eq('id', dyadId);
+
+    if (failUpdateError) {
+      console.error(`[Runner] Failed to mark dyad ${dyadId} as failed:`, failUpdateError.message);
+    }
 
     this.emit({
       type: 'dyad:failed',
@@ -355,10 +369,15 @@ export class ExperimentRunner {
     const factors = dyad.factors as Record<string, string>;
 
     // Mark as running
-    await supabase
+    const { error: runningError } = await supabase
       .from('dyads')
       .update({ status: 'running', started_at: new Date().toISOString() })
       .eq('id', dyadId);
+
+    if (runningError) {
+      console.error(`[Runner] Failed to mark dyad ${dyadId} as running:`, runningError.message);
+      throw new Error(`Failed to mark dyad ${dyadId} as running: ${runningError.message}`);
+    }
 
     this.emit({ type: 'dyad:started', experimentId, dyadId });
 
@@ -497,15 +516,20 @@ export class ExperimentRunner {
     }
 
     if (Object.keys(mergedOutcome).length > 0) {
-      await supabase.from('outcome_records').insert({
+      const { error: outcomeError } = await supabase.from('outcome_records').insert({
         dyad_id: dyadId,
         experiment_id: experimentId,
         data: mergedOutcome,
       });
+
+      if (outcomeError) {
+        console.error(`[Runner] Failed to persist outcome record for dyad ${dyadId}:`, outcomeError.message);
+        throw new Error(`Failed to persist outcome record for dyad ${dyadId}: ${outcomeError.message}`);
+      }
     }
 
     // Mark dyad as completed
-    await supabase
+    const { error: completedError } = await supabase
       .from('dyads')
       .update({
         status: 'completed',
@@ -514,6 +538,11 @@ export class ExperimentRunner {
         completed_at: new Date().toISOString(),
       })
       .eq('id', dyadId);
+
+    if (completedError) {
+      console.error(`[Runner] Failed to mark dyad ${dyadId} as completed:`, completedError.message);
+      throw new Error(`Failed to mark dyad ${dyadId} as completed: ${completedError.message}`);
+    }
 
     this.emit({ type: 'dyad:completed', experimentId, dyadId });
   }
@@ -534,8 +563,8 @@ export class ExperimentRunner {
         a => a.agentName === scenarioAgent.name,
       );
 
-      let provider: ProviderType = 'openai';
-      let model = 'gpt-4o';
+      let provider: ProviderType | null = null;
+      let model: string | null = null;
       let temperature = 0.7;
 
       if (assignment) {
@@ -562,6 +591,17 @@ export class ExperimentRunner {
             }
           }
         }
+      }
+
+      // No silent fallback: an unmapped cell means the experiment config is
+      // incomplete — fail fast with a clear error instead of defaulting to a
+      // provider the user may have no API key for.
+      if (!provider || !model) {
+        const cellDesc = Object.entries(cellFactors).map(([k, v]) => `${k}=${v}`).join(', ');
+        throw new Error(
+          `No provider/model mapping for agent "${scenarioAgent.name}" in cell (${cellDesc}). ` +
+          `Add a factorMapping for this cell to the experiment's agent assignments.`,
+        );
       }
 
       // Render prompt template with experiment params
@@ -623,14 +663,14 @@ export class ExperimentRunner {
       const apiKey = this.resolveApiKey(config.provider);
 
       if (supervisorDef.type === 'classifier' || supervisorDef.type === 'appraiser') {
-        const allowedValues = this.extractAllowedValues(supervisorDef);
+        const allowedValues = extractAllowedValues(supervisorDef.outputSchema);
         agents.set(supervisorDef.name, new ClassifierAgent({
           ...config,
           apiKey,
           allowedValues,
         }));
       } else {
-        const expectedKeys = this.extractExpectedKeys(supervisorDef);
+        const expectedKeys = extractExpectedKeys(supervisorDef.outputSchema);
         agents.set(supervisorDef.name, new ExtractorAgent({
           ...config,
           apiKey,
@@ -659,8 +699,12 @@ export class ExperimentRunner {
     cellFactors: Record<string, string>,
   ): string {
     let rendered = template;
-    // Substitute experiment params
-    for (const [key, value] of Object.entries(this.experiment.params)) {
+    // Substitute params: scenario defaults, overridden by experiment params
+    const params: Record<string, unknown> = {
+      ...(this.scenario.defaultParams ?? {}),
+      ...this.experiment.params,
+    };
+    for (const [key, value] of Object.entries(params)) {
       rendered = rendered.replaceAll(`{${key}}`, String(value));
     }
     // Substitute cell factor values
@@ -679,25 +723,6 @@ export class ExperimentRunner {
       hashes[supervisor.name] = simpleHash(supervisor.promptTemplate);
     }
     return hashes;
-  }
-
-  private extractAllowedValues(supervisor: SupervisorDefinition): string[] {
-    const schema = supervisor.outputSchema;
-    if (Array.isArray(schema['allowedValues'])) {
-      return schema['allowedValues'] as string[];
-    }
-    if (Array.isArray(schema['values'])) {
-      return schema['values'] as string[];
-    }
-    return ['CONTINUE'];
-  }
-
-  private extractExpectedKeys(supervisor: SupervisorDefinition): string[] {
-    const schema = supervisor.outputSchema;
-    if (typeof schema === 'object' && schema !== null) {
-      return Object.keys(schema).filter(k => k !== 'type' && k !== 'allowedValues');
-    }
-    return [];
   }
 
   /**

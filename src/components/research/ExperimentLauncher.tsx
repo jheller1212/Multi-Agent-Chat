@@ -207,7 +207,7 @@ export function ExperimentLauncher({ scenarioId, scenarioName, onLaunch, onBack 
         targetNPerCell: nPerCell,
         bufferPercent: 0,
         agentAssignments,
-        params: {},
+        params: { ...(scenario.defaultParams ?? {}) },
         concurrency,
         devMode,
       };
