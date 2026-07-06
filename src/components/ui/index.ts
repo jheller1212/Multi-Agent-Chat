@@ -16,3 +16,5 @@ export type { CardProps, InteractiveCardProps } from './Card';
 export { Sheet } from './Sheet';
 export type { SheetProps } from './Sheet';
 export { Toaster, toast } from './Toast';
+export { FileDropZone } from './FileDropZone';
+export type { FileDropZoneProps } from './FileDropZone';

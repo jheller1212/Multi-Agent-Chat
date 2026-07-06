@@ -10,6 +10,8 @@ const LandingPage = lazy(() => import('./components/LandingPage').then(m => ({ d
 const PrivacyPolicy = lazy(() => import('./components/PrivacyPolicy').then(m => ({ default: m.PrivacyPolicy })));
 const TermsOfUse = lazy(() => import('./components/TermsOfUse').then(m => ({ default: m.TermsOfUse })));
 const ResearchLayout = lazy(() => import('./components/research/ResearchLayout').then(m => ({ default: m.ResearchLayout })));
+// DEV-ONLY: design-system showcase at #/ui-showcase (dev builds only, no nav link)
+const UiShowcase = lazy(() => import('./components/ui/Showcase').then(m => ({ default: m.Showcase })));
 import { clearVault, loadVault, loadVaultFromServer, syncVaultToServer, saveVault } from './lib/apiKeyVault';
 import type { ProviderVault } from './lib/apiKeyVault';
 
@@ -199,6 +201,15 @@ function App() {
     clearVault();
     await supabase.auth.signOut();
   };
+
+  // DEV-ONLY: design-system showcase route, stripped from production builds
+  if (import.meta.env.DEV && window.location.hash === '#/ui-showcase') {
+    return (
+      <Suspense fallback={null}>
+        <UiShowcase />
+      </Suspense>
+    );
+  }
 
   if (loading) {
     return (
