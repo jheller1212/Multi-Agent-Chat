@@ -41,8 +41,13 @@ export async function getExperimentProgress(experimentId: string): Promise<RunPr
  * Update progress in the research_experiments table.
  */
 export async function updateExperimentProgress(experimentId: string, progress: RunProgress): Promise<void> {
-  await supabase
+  const { error } = await supabase
     .from('research_experiments')
     .update({ progress })
     .eq('id', experimentId);
+
+  if (error) {
+    // Non-fatal: progress display lags, but the run itself continues.
+    console.warn(`[Progress] Failed to update progress for ${experimentId}:`, error.message);
+  }
 }

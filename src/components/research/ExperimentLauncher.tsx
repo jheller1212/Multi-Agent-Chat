@@ -33,6 +33,12 @@ const PROVIDER_OPTIONS = [
   { value: 'alibaba', label: 'Alibaba', dot: '#FF6A00' },
 ];
 
+// Extract {PLACEHOLDER} names from a prompt template
+function extractPlaceholders(template: string): string[] {
+  const matches = template.matchAll(/\{([A-Za-z][A-Za-z0-9_]*)\}/g);
+  return [...new Set([...matches].map(m => m[1]))];
+}
+
 // Map ProviderVault keys to ProviderType identifiers used by the runner
 function vaultToApiKeys(vault: ReturnType<typeof loadVault>): Record<string, string> {
   return {
@@ -54,6 +60,26 @@ export function ExperimentLauncher({ scenarioId, scenarioName, onLaunch, onBack 
   const [launching, setLaunching] = useState(false);
   const [launchError, setLaunchError] = useState<string | null>(null);
   const runnerRef = useRef<ExperimentRunner | null>(null);
+
+  // Scenario prompt parameters ({TARGET_PRICE} etc.) — detected from the
+  // scenario's prompt templates, filled in by the researcher before launch.
+  const [detectedPlaceholders, setDetectedPlaceholders] = useState<string[]>([]);
+  const [paramValues, setParamValues] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!scenarioId) { setDetectedPlaceholders([]); return; }
+    let cancelled = false;
+    void (async () => {
+      const scenario = await loadScenario(scenarioId);
+      if (cancelled || !scenario) return;
+      const all = new Set<string>();
+      for (const agent of scenario.domainAgents) {
+        for (const p of extractPlaceholders(agent.defaultPromptTemplate)) all.add(p);
+      }
+      setDetectedPlaceholders([...all]);
+    })();
+    return () => { cancelled = true; };
+  }, [scenarioId]);
 
   // Model selection — default to first provider with a key
   const initialVault = loadVault();
@@ -113,6 +139,12 @@ export function ExperimentLauncher({ scenarioId, scenarioName, onLaunch, onBack 
   const cellCount = factors.reduce((acc, f) => acc * f.levels.length, 1);
   const totalDyads = cellCount * nPerCell;
 
+  // Placeholders not covered by a factor must be supplied as params
+  const paramPlaceholders = detectedPlaceholders.filter(
+    p => !factors.some(f => f.name === p),
+  );
+  const unboundParams = paramPlaceholders.filter(p => !(paramValues[p] ?? '').trim());
+
   const addFactor = () => {
     setFactors([...factors, { name: `factor_${factors.length + 1}`, levels: ['level_a', 'level_b'] }]);
   };
@@ -146,6 +178,13 @@ export function ExperimentLauncher({ scenarioId, scenarioName, onLaunch, onBack 
       const scenario = await loadScenario(resolvedScenarioId);
       if (!scenario) {
         setLaunchError('Scenario not found. Select a scenario before launching.');
+        setLaunching(false);
+        return;
+      }
+
+      // All prompt parameters must be bound before spending API budget
+      if (unboundParams.length > 0) {
+        setLaunchError(`Missing prompt parameter value(s): ${unboundParams.join(', ')}. Fill them in the Parameters card below.`);
         setLaunching(false);
         return;
       }
@@ -207,7 +246,9 @@ export function ExperimentLauncher({ scenarioId, scenarioName, onLaunch, onBack 
         targetNPerCell: nPerCell,
         bufferPercent: 0,
         agentAssignments,
-        params: {},
+        params: Object.fromEntries(
+          paramPlaceholders.map(p => [p, (paramValues[p] ?? '').trim()]),
+        ),
         concurrency,
         devMode,
       };

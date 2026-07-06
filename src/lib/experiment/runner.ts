@@ -319,14 +319,19 @@ export class ExperimentRunner {
       }
     }
 
-    // Mark dyad as permanently failed
-    await supabase
+    // Mark dyad as permanently failed. Log (not throw) on error — a failed
+    // status write should not abort the rest of the experiment.
+    const { error: failedError } = await supabase
       .from('dyads')
       .update({
         status: 'failed',
         failure_reason: lastError?.message ?? 'unknown',
       })
       .eq('id', dyadId);
+
+    if (failedError) {
+      console.warn(`[Runner] Could not mark dyad ${dyadId} as failed:`, failedError.message);
+    }
 
     this.emit({
       type: 'dyad:failed',
@@ -355,19 +360,26 @@ export class ExperimentRunner {
     const factors = dyad.factors as Record<string, string>;
 
     // Mark as running
-    await supabase
+    const { error: runningError } = await supabase
       .from('dyads')
       .update({ status: 'running', started_at: new Date().toISOString() })
       .eq('id', dyadId);
+
+    if (runningError) {
+      throw new Error(`Failed to mark dyad ${dyadId} as running: ${runningError.message}`);
+    }
 
     this.emit({ type: 'dyad:started', experimentId, dyadId });
 
     // Build agent configs from experiment definition + cell factors
     const { agentConfigs, supervisorConfigs } = this.buildAgentConfigs(factors);
 
-    // Build orchestrator callbacks
+    // Build orchestrator callbacks. In devMode supervisors are never called,
+    // so skip constructing them (construction resolves API keys and would throw).
     const domainAgents = this.createDomainAgents(agentConfigs);
-    const supervisorAgents = this.createSupervisorAgents(supervisorConfigs);
+    const supervisorAgents = this.experiment.devMode
+      ? new Map<string, ClassifierAgent | ExtractorAgent>()
+      : this.createSupervisorAgents(supervisorConfigs);
 
     const orchestrator = new ConversationOrchestrator({
       scenario: this.maybeDevModeScenario(),
@@ -497,15 +509,19 @@ export class ExperimentRunner {
     }
 
     if (Object.keys(mergedOutcome).length > 0) {
-      await supabase.from('outcome_records').insert({
+      const { error: outcomeError } = await supabase.from('outcome_records').insert({
         dyad_id: dyadId,
         experiment_id: experimentId,
         data: mergedOutcome,
       });
+
+      if (outcomeError) {
+        throw new Error(`Failed to persist outcome record for dyad ${dyadId}: ${outcomeError.message}`);
+      }
     }
 
     // Mark dyad as completed
-    await supabase
+    const { error: completedError } = await supabase
       .from('dyads')
       .update({
         status: 'completed',
@@ -514,6 +530,10 @@ export class ExperimentRunner {
         completed_at: new Date().toISOString(),
       })
       .eq('id', dyadId);
+
+    if (completedError) {
+      throw new Error(`Failed to mark dyad ${dyadId} as completed: ${completedError.message}`);
+    }
 
     this.emit({ type: 'dyad:completed', experimentId, dyadId });
   }
@@ -534,35 +554,44 @@ export class ExperimentRunner {
         a => a.agentName === scenarioAgent.name,
       );
 
-      let provider: ProviderType = 'openai';
-      let model = 'gpt-4o';
-      let temperature = 0.7;
+      if (!assignment) {
+        throw new Error(
+          `No model assignment for agent "${scenarioAgent.name}". ` +
+          'Every domain agent needs a provider/model assignment before launch.',
+        );
+      }
 
-      if (assignment) {
-        // factorMappings keys are "factorName=level" (e.g., "buyer_capability=strong").
-        // Find the first key whose factor name + level matches this cell's factor values.
-        for (const [key, mapping] of Object.entries(assignment.factorMappings)) {
-          const eqIdx = key.indexOf('=');
-          if (eqIdx === -1) {
-            // Legacy: treat key as a plain factor name
-            if (cellFactors[key] !== undefined) {
-              provider = mapping.provider;
-              model = mapping.model;
-              temperature = mapping.temperature;
-              break;
-            }
-          } else {
-            const factorName = key.slice(0, eqIdx);
-            const factorLevel = key.slice(eqIdx + 1);
-            if (cellFactors[factorName] === factorLevel) {
-              provider = mapping.provider;
-              model = mapping.model;
-              temperature = mapping.temperature;
-              break;
-            }
+      let resolved: { provider: ProviderType; model: string; temperature: number } | null = null;
+
+      // factorMappings keys are "factorName=level" (e.g., "buyer_capability=strong").
+      // Find the first key whose factor name + level matches this cell's factor values.
+      for (const [key, mapping] of Object.entries(assignment.factorMappings)) {
+        const eqIdx = key.indexOf('=');
+        if (eqIdx === -1) {
+          // Legacy: treat key as a plain factor name
+          if (cellFactors[key] !== undefined) {
+            resolved = mapping;
+            break;
+          }
+        } else {
+          const factorName = key.slice(0, eqIdx);
+          const factorLevel = key.slice(eqIdx + 1);
+          if (cellFactors[factorName] === factorLevel) {
+            resolved = mapping;
+            break;
           }
         }
       }
+
+      if (!resolved) {
+        const cellDesc = Object.entries(cellFactors).map(([k, v]) => `${k}=${v}`).join(', ');
+        throw new Error(
+          `No factor mapping matched for agent "${scenarioAgent.name}" in cell (${cellDesc}). ` +
+          'Check the experiment\'s model assignments — refusing to fall back to a default model.',
+        );
+      }
+
+      const { provider, model, temperature } = resolved;
 
       // Render prompt template with experiment params
       const systemPrompt = this.renderPromptTemplate(
@@ -581,11 +610,12 @@ export class ExperimentRunner {
       });
     }
 
-    // Supervisor agents
+    // Supervisor agents — default to the first provider we actually have a key for
+    const fallback = this.defaultSupervisorModel();
     for (const supervisor of this.scenario.supervisors) {
       const override = this.experiment.supervisors?.[supervisor.name];
-      const provider: ProviderType = override?.provider ?? 'openai';
-      const model = override?.model ?? 'gpt-4o';
+      const provider: ProviderType = override?.provider ?? fallback.provider;
+      const model = override?.model ?? fallback.model;
       const temperature = override?.temperature ?? 0;
 
       supervisorConfigs.set(supervisor.name, {
@@ -654,6 +684,27 @@ export class ExperimentRunner {
     return key;
   }
 
+  /**
+   * Default supervisor provider/model: the first provider with a configured key.
+   * Avoids hardcoding openai when the researcher only has e.g. an Anthropic key.
+   */
+  private defaultSupervisorModel(): { provider: ProviderType; model: string } {
+    const DEFAULT_MODELS: Record<string, string> = {
+      openai: 'gpt-4o',
+      anthropic: 'claude-sonnet-4-6',
+      google: 'gemini-1.5-pro',
+      mistral: 'mistral-large-latest',
+      meta: 'llama-3.1-70b-instruct',
+      alibaba: 'qwen-2.5-72b-instruct',
+    };
+    for (const provider of Object.keys(DEFAULT_MODELS)) {
+      if (this.apiKeys[provider]) {
+        return { provider: provider as ProviderType, model: DEFAULT_MODELS[provider] };
+      }
+    }
+    throw new Error('No API key configured for any provider — cannot run supervisors.');
+  }
+
   private renderPromptTemplate(
     template: string,
     cellFactors: Record<string, string>,
@@ -683,19 +734,40 @@ export class ExperimentRunner {
 
   private extractAllowedValues(supervisor: SupervisorDefinition): string[] {
     const schema = supervisor.outputSchema;
+    // Simple shape: { allowedValues: [...] } or { values: [...] }
     if (Array.isArray(schema['allowedValues'])) {
       return schema['allowedValues'] as string[];
     }
     if (Array.isArray(schema['values'])) {
       return schema['values'] as string[];
     }
+    // JSON-Schema shape: { type: 'object', properties: { status: { enum: [...] } } }
+    const properties = schema['properties'];
+    if (typeof properties === 'object' && properties !== null) {
+      for (const prop of Object.values(properties as Record<string, unknown>)) {
+        if (prop && typeof prop === 'object') {
+          const enumValues = (prop as Record<string, unknown>)['enum'];
+          if (Array.isArray(enumValues)) {
+            return enumValues as string[];
+          }
+        }
+      }
+    }
     return ['CONTINUE'];
   }
 
   private extractExpectedKeys(supervisor: SupervisorDefinition): string[] {
     const schema = supervisor.outputSchema;
+    // JSON-Schema shape: property names are the expected output keys
+    const properties = schema['properties'];
+    if (typeof properties === 'object' && properties !== null) {
+      return Object.keys(properties as Record<string, unknown>);
+    }
+    // Simple shape: top-level keys minus structural fields
     if (typeof schema === 'object' && schema !== null) {
-      return Object.keys(schema).filter(k => k !== 'type' && k !== 'allowedValues');
+      return Object.keys(schema).filter(
+        k => k !== 'type' && k !== 'allowedValues' && k !== 'values' && k !== 'required',
+      );
     }
     return [];
   }
