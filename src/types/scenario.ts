@@ -55,6 +55,8 @@ export interface Scenario {
   turnPolicy: TurnPolicy;
   terminationConditions: TerminationCondition[];
   outcomeSchema: OutcomeSchema;
+  /** Default values for prompt template placeholders (e.g., {TARGET_PRICE}). Experiment params override these. */
+  defaultParams?: Record<string, string | number>;
   createdAt: string;
   updatedAt: string;
 }

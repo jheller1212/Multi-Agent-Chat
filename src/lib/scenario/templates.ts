@@ -39,6 +39,12 @@ export const PROCUREMENT_SCENARIO: Omit<Scenario, 'id' | 'userId' | 'createdAt' 
     ],
     utilityFunction: 'weighted_sum',
   },
+  defaultParams: {
+    LIST_PRICE: 120,
+    TARGET_PRICE: 80,
+    WALKAWAY: 100,
+    FLOOR_PRICE: 70,
+  },
 };
 
 export const LEGAL_ADVOCACY_SCENARIO: Omit<Scenario, 'id' | 'userId' | 'createdAt' | 'updatedAt'> = {
