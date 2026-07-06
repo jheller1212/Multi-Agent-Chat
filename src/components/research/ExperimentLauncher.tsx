@@ -394,6 +394,38 @@ export function ExperimentLauncher({ scenarioId, scenarioName, onLaunch, onBack 
           </div>
         </div>
 
+        {/* Prompt Parameters */}
+        {paramPlaceholders.length > 0 && (
+          <div className="r-card" style={{ marginBottom: 16 }}>
+            <h3 style={{ fontFamily: 'var(--font-h)', fontSize: 15, fontWeight: 700, marginBottom: 4 }}>
+              Parameters ({paramPlaceholders.length})
+            </h3>
+            <p style={{ fontSize: 12, color: 'var(--text-3)', margin: '0 0 12px' }}>
+              These placeholders appear in the scenario prompts and must have values before launch.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              {paramPlaceholders.map(p => (
+                <div key={p}>
+                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: (paramValues[p] ?? '').trim() ? 'var(--text-3)' : 'var(--accent-1)', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 6, fontFamily: 'var(--font-mono)' }}>
+                    {`{${p}}`}
+                  </label>
+                  <input
+                    value={paramValues[p] ?? ''}
+                    onChange={e => setParamValues(v => ({ ...v, [p]: e.target.value }))}
+                    placeholder="Value"
+                    style={{
+                      width: '100%', padding: '8px 12px', borderRadius: 6,
+                      border: '1px solid var(--line-2)', background: 'var(--surface-panel)',
+                      color: 'var(--text-1)', fontSize: 13, fontFamily: 'var(--font-mono)',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Model Selection */}
         <div className="r-card" style={{ marginBottom: 16 }}>
           <h3 style={{ fontFamily: 'var(--font-h)', fontSize: 15, fontWeight: 700, marginBottom: 4 }}>
@@ -523,6 +555,7 @@ export function ExperimentLauncher({ scenarioId, scenarioName, onLaunch, onBack 
             { label: 'Scenario selected', ok: hasScenario, detail: hasScenario ? `ID: ${scenarioId?.slice(0, 8)}...` : 'Go back and select a scenario first', tooltip: 'A scenario defines the agents, prompts, turn-taking policy, and outcome schema. Clone one from the Library or create a blank scenario first.' },
             { label: 'API key for selected provider', ok: hasKeyForProvider, detail: hasKeyForProvider ? `${PROVIDER_OPTIONS.find(p => p.value === selectedProvider)?.label} key configured${configuredProviders.length > 1 ? ` (also: ${configuredProviders.filter(p => p.value !== selectedProvider).map(p => p.label).join(', ')})` : ''}` : `No key for ${PROVIDER_OPTIONS.find(p => p.value === selectedProvider)?.label ?? selectedProvider}${hasAnyKey ? `. Switch to: ${configuredProviders.map(p => p.label).join(', ')}` : ''}`, tooltip: 'You need an API key for the provider you selected above. The key is stored encrypted in your browser. Get one from the provider\'s developer console (e.g., platform.openai.com/api-keys for OpenAI, console.anthropic.com for Anthropic).', action: hasAnyKey && !hasKeyForProvider ? () => { const first = configuredProviders[0]; if (first) setSelectedProvider(first.value); } : () => setShowKeyInput(true), actionLabel: hasAnyKey && !hasKeyForProvider ? `Switch to ${configuredProviders[0]?.label}` : 'Add key' },
             { label: 'Factors defined', ok: hasFactors, detail: hasFactors ? `${factors.length} factor(s), ${cellCount} cells` : 'Each factor needs at least 2 levels', tooltip: 'Factors are the independent variables in your experiment. Each factor has levels (e.g., "capability: strong, weak"). The platform cross-joins all factors to create cells. Each cell gets N dyads.' },
+            { label: 'Prompt parameters', ok: unboundParams.length === 0, detail: paramPlaceholders.length === 0 ? 'No parameters in this scenario' : unboundParams.length === 0 ? `All ${paramPlaceholders.length} parameter(s) set` : `Missing: ${unboundParams.join(', ')}`, tooltip: 'Placeholders like {TARGET_PRICE} in the scenario prompts must be given concrete values, or agents would see the literal placeholder text.' },
             { label: 'N per cell', ok: nReasonable, detail: nReasonable ? `${nPerCell} dyads × ${cellCount} cells = ${totalDyads} total` : 'Must be between 1 and 500', tooltip: 'How many agent-to-agent conversations to run per experimental cell. Higher N = more statistical power but more API cost. Start with 2–4 for testing, 50–150 for production.' },
             { label: 'Concurrency', ok: concurrencyOk, detail: concurrencyOk ? `${concurrency} parallel dyads` : 'Must be between 1 and 20', tooltip: 'How many dyads run simultaneously. Higher = faster but more API rate-limit risk. 5 is a safe default. Reduce to 1–2 if you hit rate limits.' },
             { label: 'Mode', ok: true, detail: devMode ? 'Dev mode — supervisors skipped (fast + cheap)' : 'Production — full supervisor pipeline', tooltip: 'Dev mode skips supervisor agents (judge, analyst, appraiser) to save API costs during testing. Use Production mode for real data collection — supervisors classify rounds, extract values, and score outcomes.' },
