@@ -1,7 +1,9 @@
 import { StrictMode, Component } from 'react';
 import type { ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { MotionConfig } from 'framer-motion';
 import App from './App.tsx';
+import { Toaster } from './components/ui';
 import './index.css';
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
@@ -33,7 +35,10 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
-      <App />
+      <MotionConfig reducedMotion="user">
+        <App />
+        <Toaster />
+      </MotionConfig>
     </ErrorBoundary>
   </StrictMode>
 );

@@ -434,3 +434,167 @@
 .anom-row:last-child { border-bottom: 0; }
 .anom-row-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
 .anom-row-ex { font-size: 11.5px; color: var(--text-2); }
+
+/* =====================================================
+   DESIGN SYSTEM v1 — docs/design-system.md
+   Apple-feel tokens. New components use ONLY these.
+   Legacy tokens above are deprecated; delete each when
+   its last consumer is migrated.
+   ===================================================== */
+
+:root {
+  color-scheme: light;
+
+  /* Fonts */
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable",
+               "Segoe UI", system-ui, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas,
+               "Liberation Mono", monospace;
+
+  /* Backgrounds */
+  --bg-base:      #FFFFFF;
+  --bg-elevated:  #FFFFFF;
+  --bg-grouped:   #F5F5F7;
+  --bg-sidebar:   rgba(246, 246, 248, 0.80);
+  --bg-sunken:    #EFEFF1;
+
+  /* Labels */
+  --label-primary:    #1D1D1F;
+  --label-secondary:  #55555C;
+  --label-tertiary:   #86868C;
+  --label-quaternary: #B4B4BA;
+
+  /* Separators */
+  --separator:        rgba(29, 29, 31, 0.10);
+  --separator-opaque: #E8E8EA;
+
+  /* Fills */
+  --fill-primary:    rgba(120, 120, 128, 0.16);
+  --fill-secondary:  rgba(120, 120, 128, 0.10);
+  --fill-tertiary:   rgba(120, 120, 128, 0.06);
+
+  /* Accent */
+  --accent:          #0A7AFF;
+  --accent-hover:    #0070EB;
+  --accent-pressed:  #0063D1;
+  --accent-soft:     rgba(10, 122, 255, 0.10);
+  --accent-soft-2:   rgba(10, 122, 255, 0.16);
+  --accent-fill:     #0A7AFF; /* filled buttons: same value both themes */
+  --accent-fill-hover: #0070EB;
+  --on-accent:       #FFFFFF;
+
+  /* Semantic */
+  --success:      #1F9D55;
+  --success-soft: rgba(31, 157, 85, 0.12);
+  --warning:      #B25000;
+  --warning-soft: rgba(255, 149, 0, 0.15);
+  --destructive:  #E02D2D;
+  --destructive-soft: rgba(224, 45, 45, 0.10);
+
+  /* Agent identity */
+  --agent-1: #0A7AFF; --agent-2: #17877D; --agent-3: #B25000;
+  --agent-4: #7A5AF8; --agent-5: #C93A6E;
+
+  /* Depth */
+  --shadow-1: 0 0 0 1px var(--separator), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-2: 0 0 0 1px var(--separator), 0 2px 8px rgba(0, 0, 0, 0.08),
+              0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-3: 0 0 0 1px var(--separator), 0 8px 24px rgba(0, 0, 0, 0.12),
+              0 2px 6px rgba(0, 0, 0, 0.06);
+  --shadow-4: 0 0 0 1px var(--separator), 0 24px 60px rgba(0, 0, 0, 0.18),
+              0 8px 16px rgba(0, 0, 0, 0.08);
+
+  /* Motion (non-spring) */
+  --dur-instant: 80ms;
+  --dur-fast: 160ms;
+  --dur-med: 240ms;
+  --ease-out: cubic-bezier(0.25, 0.1, 0.25, 1);
+
+  /* Scrim */
+  --scrim: rgba(0, 0, 0, 0.20);
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg-base:      #1C1C1E;
+  --bg-elevated:  #2C2C2E;
+  --bg-grouped:   #131315;
+  --bg-sidebar:   rgba(28, 28, 30, 0.72);
+  --bg-sunken:    #141416;
+
+  --label-primary:    #F5F5F7;
+  --label-secondary:  #B0B0B8;
+  --label-tertiary:   #7C7C85;
+  --label-quaternary: #4A4A52;
+
+  --separator:        rgba(245, 245, 247, 0.12);
+  --separator-opaque: #38383A;
+
+  --fill-primary:    rgba(120, 120, 128, 0.36);
+  --fill-secondary:  rgba(120, 120, 128, 0.24);
+  --fill-tertiary:   rgba(120, 120, 128, 0.14);
+
+  --accent:          #409CFF;
+  --accent-hover:    #5CAAFF;
+  --accent-pressed:  #2E8BF0;
+  --accent-soft:     rgba(64, 156, 255, 0.16);
+  --accent-soft-2:   rgba(64, 156, 255, 0.24);
+  --accent-fill:     #0A7AFF;
+  --accent-fill-hover: #0070EB;
+  --on-accent:       #FFFFFF;
+
+  --success:      #30C567; --success-soft: rgba(48, 197, 103, 0.16);
+  --warning:      #FFA028; --warning-soft: rgba(255, 160, 40, 0.16);
+  --destructive:  #FF5C5C; --destructive-soft: rgba(255, 92, 92, 0.14);
+
+  --agent-1: #409CFF; --agent-2: #3ECFC0; --agent-3: #FFA028;
+  --agent-4: #A48CFF; --agent-5: #FF7AA8;
+
+  --shadow-1: 0 0 0 1px var(--separator), 0 1px 2px rgba(0,0,0,0.30);
+  --shadow-2: 0 0 0 1px var(--separator), 0 2px 10px rgba(0,0,0,0.45);
+  --shadow-3: 0 0 0 1px var(--separator), 0 10px 30px rgba(0,0,0,0.55);
+  --shadow-4: 0 0 0 1px var(--separator), 0 28px 70px rgba(0,0,0,0.65);
+
+  --scrim: rgba(0, 0, 0, 0.45);
+}
+
+/* DS utilities */
+.tnum { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+
+@media (min-resolution: 2dppx) {
+  .hairline { border-width: 0.5px; }
+}
+
+.material-sidebar {
+  background: var(--bg-sidebar);
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+  backdrop-filter: blur(24px) saturate(1.6);
+  border-right: 1px solid var(--separator);
+}
+
+.material-toolbar {
+  background: color-mix(in srgb, var(--bg-base) 78%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(1.5);
+  backdrop-filter: blur(16px) saturate(1.5);
+  border-bottom: 1px solid var(--separator);
+}
+
+.material-scrim {
+  background: var(--scrim);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .material-sidebar { background: #F4F4F6; }
+  [data-theme="dark"] .material-sidebar { background: #202022; }
+  .material-toolbar { background: var(--bg-base); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
