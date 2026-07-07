@@ -80,7 +80,13 @@ export class ClassifierAgent extends BaseAgent {
       if (upper.includes(val)) return val;
     }
 
-    // Default to first non-terminal value or first value
+    // Unparseable response: prefer the non-terminal CONTINUE if allowed, so a
+    // garbled classifier reply never terminates a run.
+    // NOTE: this previously returned the LAST allowed value, which made the
+    // schema's enum ordering load-bearing (templates happened to list
+    // CONTINUE last). The positional fallback remains only for schemas
+    // without a CONTINUE value.
+    if (this.allowedValues.includes('CONTINUE')) return 'CONTINUE';
     return this.allowedValues[this.allowedValues.length - 1] ?? 'UNKNOWN';
   }
 }

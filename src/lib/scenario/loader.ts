@@ -1,6 +1,6 @@
 import { supabase } from '../supabase';
 import type { Scenario } from '../../types/scenario';
-import { SCENARIO_TEMPLATES } from './templates';
+import { SCENARIO_TEMPLATES, TEMPLATE_VERSION } from './templates';
 
 /**
  * Load a scenario by ID from Supabase.
@@ -151,34 +151,63 @@ export async function cloneScenario(scenarioId: string): Promise<Scenario | null
 }
 
 /**
- * Seed pre-built scenario templates into the database.
- * Called once when the app initialises. Skips if templates already exist.
+ * Seed pre-built scenario templates into the database and keep them current.
+ * Called when the app initialises.
+ *
+ * Versioned refresh: each seeded template row stores config.templateVersion.
+ * When a built-in template changes (TEMPLATE_VERSION bump), existing template
+ * rows (is_template = true, matched by name) are refreshed in place. Only
+ * template rows are ever touched — user clones and edits (is_template = false)
+ * are never modified. Rows owned by other users are invisible to the RLS
+ * UPDATE policy and are simply left as-is.
  */
 export async function seedScenarioTemplates(): Promise<void> {
   // Only seed if user is authenticated (RLS requires user_id)
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
 
-  const { count } = await supabase
+  const { data: existing, error: fetchError } = await supabase
     .from('scenarios')
-    .select('*', { count: 'exact', head: true })
+    .select('id, name, config')
     .eq('is_template', true);
 
-  if (count && count >= SCENARIO_TEMPLATES.length) return;
+  if (fetchError) {
+    console.warn('[Scenario] Failed to load existing templates:', fetchError.message);
+    return;
+  }
 
   for (const template of SCENARIO_TEMPLATES) {
     const { name, description, isPublic, isTemplate, ...config } = template;
+    const versionedConfig = { ...config, templateVersion: TEMPLATE_VERSION };
 
-    const { error } = await supabase.from('scenarios').insert({
-      name,
-      description,
-      is_public: isPublic,
-      is_template: isTemplate,
-      config,
-    });
+    const match = (existing ?? []).find(row => row.name === name);
+
+    if (!match) {
+      const { error } = await supabase.from('scenarios').insert({
+        name,
+        description,
+        is_public: isPublic,
+        is_template: isTemplate,
+        config: versionedConfig,
+      });
+
+      if (error) {
+        console.warn(`[Scenario] Failed to seed template "${name}":`, error.message);
+      }
+      continue;
+    }
+
+    const storedVersion = (match.config as Record<string, unknown> | null)?.['templateVersion'];
+    if (storedVersion === TEMPLATE_VERSION) continue;
+
+    const { error } = await supabase
+      .from('scenarios')
+      .update({ description, config: versionedConfig })
+      .eq('id', match.id)
+      .eq('is_template', true);
 
     if (error) {
-      console.warn(`[Scenario] Failed to seed template "${name}":`, error.message);
+      console.warn(`[Scenario] Failed to refresh template "${name}":`, error.message);
     }
   }
 }

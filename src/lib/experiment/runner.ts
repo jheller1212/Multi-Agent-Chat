@@ -7,8 +7,10 @@ import { ConversationOrchestrator } from '../orchestrator/orchestrator';
 import { DomainAgent } from '../agents/domain-agent';
 import { ClassifierAgent } from '../agents/classifier';
 import { ExtractorAgent } from '../agents/extractor';
-import { enumerateCells, type CellDefinition } from './cell-enumerator';
-import { extractAllowedValues, extractExpectedKeys } from './schema-utils';
+import { AppraiserAgent } from '../agents/appraiser';
+import { enumerateCells } from './cell-enumerator';
+import { resolveFactorMapping, validateAgentAssignments } from './config-validation';
+import { buildSupervisorAgents, resolveSupervisorDefault } from './supervisor-factory';
 import { getExperimentProgress, updateExperimentProgress } from './progress';
 import { supabase } from '../supabase';
 
@@ -61,6 +63,19 @@ function containsTerminationKeyword(content: string): boolean {
 // ---------------------------------------------------------------------------
 
 const MAX_RETRIES = 3;
+
+/**
+ * Thrown when the LLM conversation succeeded but a post-conversation database
+ * write kept failing. Non-retryable at the dyad level: re-running the dyad
+ * would re-run the whole (already successful) conversation and double-insert
+ * transcript rows (there is no unique key on dyad_id+turn).
+ */
+export class DyadPersistenceError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DyadPersistenceError';
+  }
+}
 
 export class ExperimentRunner {
   private readonly experiment: ExperimentDefinition;
@@ -131,6 +146,30 @@ export class ExperimentRunner {
     this.paused = false;
 
     const experimentId = this.experiment.id ?? crypto.randomUUID();
+
+    // 0. Validate config upfront: every cell must have a provider/model
+    // mapping for every domain agent. Catching this before any dyads exist
+    // avoids the pointless 3x-retry-per-dyad path on a deterministic config
+    // error and prevents an all-dyads-failed experiment from ending
+    // 'completed'.
+    const validationErrors = validateAgentAssignments(
+      this.experiment.factors,
+      this.scenario.domainAgents,
+      this.experiment.agentAssignments,
+    );
+
+    if (validationErrors.length > 0) {
+      const message = `Invalid experiment configuration:\n${validationErrors.join('\n')}`;
+      const { error: failError } = await supabase
+        .from('research_experiments')
+        .update({ status: 'failed' })
+        .eq('id', experimentId);
+      if (failError) {
+        console.error(`[Runner] Failed to mark experiment ${experimentId} as failed:`, failError.message);
+      }
+      this.emit({ type: 'experiment:failed', experimentId, error: message });
+      throw new Error(message);
+    }
 
     // 1. Update research_experiments row (experiment IS the run)
     const { error: updateError } = await supabase
@@ -322,6 +361,11 @@ export class ExperimentRunner {
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err));
         if (this.abortController?.signal.aborted) break;
+        // Persistence failures after a successful conversation are retried at
+        // the individual write level inside runDyad. Do NOT re-run the dyad:
+        // that would repeat the whole LLM conversation and double-insert
+        // transcript rows.
+        if (lastError instanceof DyadPersistenceError) break;
         // Exponential backoff between retries
         if (attempt < MAX_RETRIES - 1) {
           await sleep(1000 * Math.pow(2, attempt));
@@ -384,9 +428,16 @@ export class ExperimentRunner {
     // Build agent configs from experiment definition + cell factors
     const { agentConfigs, supervisorConfigs } = this.buildAgentConfigs(factors);
 
-    // Build orchestrator callbacks
+    // Build orchestrator callbacks. In devMode supervisors are never invoked
+    // (runSupervisor returns stubs), and constructing them resolves API keys —
+    // so buildSupervisorAgents skips construction entirely in devMode.
     const domainAgents = this.createDomainAgents(agentConfigs);
-    const supervisorAgents = this.createSupervisorAgents(supervisorConfigs);
+    const supervisorAgents = buildSupervisorAgents(
+      this.scenario,
+      supervisorConfigs,
+      this.apiKeys,
+      this.experiment.devMode,
+    );
 
     const orchestrator = new ConversationOrchestrator({
       scenario: this.maybeDevModeScenario(),
@@ -438,10 +489,27 @@ export class ExperimentRunner {
             afterTurn: transcript.length,
           });
           return output;
+        } else if (agent instanceof AppraiserAgent) {
+          const lastMessage = transcript[transcript.length - 1];
+          const { output } = await agent.appraise({
+            transcript,
+            perspectiveRole: 'each negotiator',
+            outcomeSummary: lastMessage
+              ? `Final message (${lastMessage.agentName}): ${lastMessage.content}`
+              : 'No messages were exchanged.',
+          });
+          return output;
         } else if (agent instanceof ExtractorAgent) {
+          // The extractor only feeds recent messages to the model, so inject
+          // the full transcript via the {FULL_TRANSCRIPT} prompt slot.
           const { output } = await agent.extract({
             transcript,
             afterTurn: transcript.length,
+            promptSlots: {
+              FULL_TRANSCRIPT: transcript
+                .map(m => `[turn ${m.turn}] ${m.agentName}: ${m.content}`)
+                .join('\n\n'),
+            },
           });
           return output;
         }
@@ -462,6 +530,12 @@ export class ExperimentRunner {
     // Run the conversation
     const result: OrchestratorResult = await orchestrator.run();
 
+    // -- Post-conversation persistence --------------------------------------
+    // The conversation succeeded, so every write below is retried at the
+    // write level (persistWithRetry) and, if it still fails, throws a
+    // DyadPersistenceError which the dyad retry wrapper treats as permanent —
+    // the conversation is never re-run because of a failed insert.
+
     // Persist transcript
     if (result.transcript.length > 0) {
       const transcriptInserts = result.transcript.map(msg => ({
@@ -477,16 +551,13 @@ export class ExperimentRunner {
         created_at: msg.createdAt,
       }));
 
-      const { error: transcriptError } = await supabase
-        .from('transcript_messages')
-        .insert(transcriptInserts);
-
-      if (transcriptError) {
-        throw new Error(`Failed to persist transcript for dyad ${dyadId}: ${transcriptError.message}`);
-      }
+      await this.persistWithRetry(
+        `Failed to persist transcript for dyad ${dyadId}`,
+        () => supabase.from('transcript_messages').insert(transcriptInserts),
+      );
     }
 
-    // Persist supervisor outputs
+    // Persist supervisor outputs (incl. post-termination appraiser ratings)
     if (result.supervisorOutputs.length > 0) {
       const supervisorInserts = result.supervisorOutputs.map(output => ({
         dyad_id: dyadId,
@@ -497,13 +568,10 @@ export class ExperimentRunner {
         raw_response: output.rawResponse,
       }));
 
-      const { error: supervisorError } = await supabase
-        .from('supervisor_outputs')
-        .insert(supervisorInserts);
-
-      if (supervisorError) {
-        throw new Error(`Failed to persist supervisor outputs for dyad ${dyadId}: ${supervisorError.message}`);
-      }
+      await this.persistWithRetry(
+        `Failed to persist supervisor outputs for dyad ${dyadId}`,
+        () => supabase.from('supervisor_outputs').insert(supervisorInserts),
+      );
     }
 
     // Create outcome record from post-termination extractors
@@ -516,33 +584,29 @@ export class ExperimentRunner {
     }
 
     if (Object.keys(mergedOutcome).length > 0) {
-      const { error: outcomeError } = await supabase.from('outcome_records').insert({
-        dyad_id: dyadId,
-        experiment_id: experimentId,
-        data: mergedOutcome,
-      });
-
-      if (outcomeError) {
-        console.error(`[Runner] Failed to persist outcome record for dyad ${dyadId}:`, outcomeError.message);
-        throw new Error(`Failed to persist outcome record for dyad ${dyadId}: ${outcomeError.message}`);
-      }
+      await this.persistWithRetry(
+        `Failed to persist outcome record for dyad ${dyadId}`,
+        () => supabase.from('outcome_records').insert({
+          dyad_id: dyadId,
+          experiment_id: experimentId,
+          data: mergedOutcome,
+        }),
+      );
     }
 
     // Mark dyad as completed
-    const { error: completedError } = await supabase
-      .from('dyads')
-      .update({
-        status: 'completed',
-        termination_reason: result.terminationReason,
-        termination_turn: result.terminationTurn,
-        completed_at: new Date().toISOString(),
-      })
-      .eq('id', dyadId);
-
-    if (completedError) {
-      console.error(`[Runner] Failed to mark dyad ${dyadId} as completed:`, completedError.message);
-      throw new Error(`Failed to mark dyad ${dyadId} as completed: ${completedError.message}`);
-    }
+    await this.persistWithRetry(
+      `Failed to mark dyad ${dyadId} as completed`,
+      () => supabase
+        .from('dyads')
+        .update({
+          status: 'completed',
+          termination_reason: result.terminationReason,
+          termination_turn: result.terminationTurn,
+          completed_at: new Date().toISOString(),
+        })
+        .eq('id', dyadId),
+    );
 
     this.emit({ type: 'dyad:completed', experimentId, dyadId });
   }
@@ -563,46 +627,19 @@ export class ExperimentRunner {
         a => a.agentName === scenarioAgent.name,
       );
 
-      let provider: ProviderType | null = null;
-      let model: string | null = null;
-      let temperature = 0.7;
-
-      if (assignment) {
-        // factorMappings keys are "factorName=level" (e.g., "buyer_capability=strong").
-        // Find the first key whose factor name + level matches this cell's factor values.
-        for (const [key, mapping] of Object.entries(assignment.factorMappings)) {
-          const eqIdx = key.indexOf('=');
-          if (eqIdx === -1) {
-            // Legacy: treat key as a plain factor name
-            if (cellFactors[key] !== undefined) {
-              provider = mapping.provider;
-              model = mapping.model;
-              temperature = mapping.temperature;
-              break;
-            }
-          } else {
-            const factorName = key.slice(0, eqIdx);
-            const factorLevel = key.slice(eqIdx + 1);
-            if (cellFactors[factorName] === factorLevel) {
-              provider = mapping.provider;
-              model = mapping.model;
-              temperature = mapping.temperature;
-              break;
-            }
-          }
-        }
-      }
-
       // No silent fallback: an unmapped cell means the experiment config is
       // incomplete — fail fast with a clear error instead of defaulting to a
-      // provider the user may have no API key for.
-      if (!provider || !model) {
+      // provider the user may have no API key for. start() validates all
+      // cells upfront, so this throw is defense-in-depth.
+      const resolved = resolveFactorMapping(assignment, cellFactors);
+      if (!resolved) {
         const cellDesc = Object.entries(cellFactors).map(([k, v]) => `${k}=${v}`).join(', ');
         throw new Error(
           `No provider/model mapping for agent "${scenarioAgent.name}" in cell (${cellDesc}). ` +
           `Add a factorMapping for this cell to the experiment's agent assignments.`,
         );
       }
+      const { provider, model, temperature } = resolved;
 
       // Render prompt template with experiment params
       const systemPrompt = this.renderPromptTemplate(
@@ -621,11 +658,17 @@ export class ExperimentRunner {
       });
     }
 
-    // Supervisor agents
+    // Supervisor agents — default to the provider/model already mapped for
+    // this cell's domain agents (a key is guaranteed for it) instead of a
+    // hardcoded openai default the researcher may have no key for.
+    const supervisorDefault = resolveSupervisorDefault(
+      [...agentConfigs.values()],
+      this.apiKeys,
+    );
     for (const supervisor of this.scenario.supervisors) {
       const override = this.experiment.supervisors?.[supervisor.name];
-      const provider: ProviderType = override?.provider ?? 'openai';
-      const model = override?.model ?? 'gpt-4o';
+      const provider: ProviderType = override?.provider ?? supervisorDefault.provider;
+      const model = override?.model ?? supervisorDefault.model;
       const temperature = override?.temperature ?? 0;
 
       supervisorConfigs.set(supervisor.name, {
@@ -651,40 +694,31 @@ export class ExperimentRunner {
     return agents;
   }
 
-  private createSupervisorAgents(
-    supervisorConfigs: Map<string, AgentConfig>,
-  ): Map<string, ClassifierAgent | ExtractorAgent> {
-    const agents = new Map<string, ClassifierAgent | ExtractorAgent>();
-
-    for (const supervisorDef of this.scenario.supervisors) {
-      const config = supervisorConfigs.get(supervisorDef.name);
-      if (!config) continue;
-
-      const apiKey = this.resolveApiKey(config.provider);
-
-      if (supervisorDef.type === 'classifier' || supervisorDef.type === 'appraiser') {
-        const allowedValues = extractAllowedValues(supervisorDef.outputSchema);
-        agents.set(supervisorDef.name, new ClassifierAgent({
-          ...config,
-          apiKey,
-          allowedValues,
-        }));
-      } else {
-        const expectedKeys = extractExpectedKeys(supervisorDef.outputSchema);
-        agents.set(supervisorDef.name, new ExtractorAgent({
-          ...config,
-          apiKey,
-          expectedKeys,
-        }));
-      }
-    }
-
-    return agents;
-  }
-
   // -----------------------------------------------------------------------
   // Helpers
   // -----------------------------------------------------------------------
+
+  /**
+   * Retry a single persistence write with backoff. Throws DyadPersistenceError
+   * once retries are exhausted so the dyad retry wrapper does not re-run the
+   * (already successful) LLM conversation.
+   */
+  private async persistWithRetry(
+    label: string,
+    op: () => PromiseLike<{ error: { message: string } | null }>,
+  ): Promise<void> {
+    let lastMessage = 'unknown';
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      const { error } = await op();
+      if (!error) return;
+      lastMessage = error.message;
+      console.error(`[Runner] ${label} (attempt ${attempt + 1}/${MAX_RETRIES}):`, error.message);
+      if (attempt < MAX_RETRIES - 1) {
+        await sleep(1000 * Math.pow(2, attempt));
+      }
+    }
+    throw new DyadPersistenceError(`${label}: ${lastMessage}`);
+  }
 
   private resolveApiKey(provider: ProviderType): string {
     const key = this.apiKeys[provider];

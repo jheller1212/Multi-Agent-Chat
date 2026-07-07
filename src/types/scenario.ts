@@ -57,6 +57,8 @@ export interface Scenario {
   outcomeSchema: OutcomeSchema;
   /** Default values for prompt template placeholders (e.g., {TARGET_PRICE}). Experiment params override these. */
   defaultParams?: Record<string, string | number>;
+  /** Version of the built-in template this scenario was seeded from (template rows only). */
+  templateVersion?: number;
   createdAt: string;
   updatedAt: string;
 }
