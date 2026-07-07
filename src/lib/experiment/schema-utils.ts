@@ -1,11 +1,14 @@
 /**
  * Helpers for reading supervisor output schemas.
  *
- * Scenario templates use JSON-Schema shapes:
- *   { type: 'object', properties: { status: { type: 'string', enum: ['CONTINUE', ...] } }, required: ['status'] }
- *
- * A legacy custom shape ({ allowedValues: [...] } / { values: [...] }) is still
- * supported for backward compatibility with older stored scenarios.
+ * Three shapes are supported:
+ * - Simple shape persisted by the Scenario Studio (src/lib/scenario/simple-schema.ts):
+ *     classifier: { allowedValues: [...], terminalValues: [...] }
+ *     extractor/appraiser: { keys: [{ name, type, nullable }, ...] }
+ * - JSON-Schema (built-in templates):
+ *     { type: 'object', properties: { status: { type: 'string', enum: ['CONTINUE', ...] } }, required: ['status'] }
+ * - Legacy custom shape ({ allowedValues: [...] } / { values: [...] } / flat keys)
+ *   for backward compatibility with older stored scenarios.
  */
 
 /**
@@ -40,10 +43,20 @@ export function extractAllowedValues(schema: Record<string, unknown>): string[] 
 
 /**
  * Extract the expected output keys from a supervisor output schema.
- * Reads `Object.keys(properties)` (JSON-Schema), falling back to the legacy
+ * Reads the simple Studio shape (`keys: [{ name, type, nullable }]`) first,
+ * then `Object.keys(properties)` (JSON-Schema), falling back to the legacy
  * shape where top-level keys (minus reserved ones) are the expected keys.
  */
 export function extractExpectedKeys(schema: Record<string, unknown>): string[] {
+  // Simple shape persisted by the Scenario Studio
+  const keys = schema['keys'];
+  if (Array.isArray(keys)) {
+    return keys
+      .filter((k): k is Record<string, unknown> => !!k && typeof k === 'object')
+      .map(k => k['name'])
+      .filter((name): name is string => typeof name === 'string' && name.length > 0);
+  }
+
   const properties = schema['properties'];
   if (properties && typeof properties === 'object' && !Array.isArray(properties)) {
     return Object.keys(properties as Record<string, unknown>);
@@ -51,7 +64,7 @@ export function extractExpectedKeys(schema: Record<string, unknown>): string[] {
 
   if (typeof schema === 'object' && schema !== null) {
     return Object.keys(schema).filter(
-      k => k !== 'type' && k !== 'allowedValues' && k !== 'values' && k !== 'required',
+      k => k !== 'type' && k !== 'allowedValues' && k !== 'values' && k !== 'terminalValues' && k !== 'required',
     );
   }
 

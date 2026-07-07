@@ -22,6 +22,15 @@ describe('extractAllowedValues', () => {
     expect(extractAllowedValues({ allowedValues: ['A', 'B'] })).toEqual(['A', 'B']);
   });
 
+  it('reads the simple Studio classifier shape { allowedValues, terminalValues }', () => {
+    // Exact serialization from the Scenario Studio (serializeClassifierSchema)
+    const schema = {
+      allowedValues: ['ACCEPTANCE', 'REJECTION', 'CONTINUE'],
+      terminalValues: ['ACCEPTANCE', 'REJECTION'],
+    };
+    expect(extractAllowedValues(schema)).toEqual(['ACCEPTANCE', 'REJECTION', 'CONTINUE']);
+  });
+
   it('supports the legacy values shape', () => {
     expect(extractAllowedValues({ values: ['X', 'Y'] })).toEqual(['X', 'Y']);
   });
@@ -60,6 +69,33 @@ describe('extractExpectedKeys', () => {
   it('reads property keys from the procurement judge schema', () => {
     const schema = PROCUREMENT_SCENARIO.supervisors[0].outputSchema;
     expect(extractExpectedKeys(schema)).toEqual(['status']);
+  });
+
+  it('reads the simple Studio shape { keys: [{ name, type, nullable }] }', () => {
+    const schema = {
+      keys: [
+        { name: 'deal', type: 'integer', nullable: false },
+        { name: 'final_price', type: 'float', nullable: true },
+        { name: 'rounds', type: 'integer', nullable: false },
+      ],
+    };
+    expect(extractExpectedKeys(schema)).toEqual(['deal', 'final_price', 'rounds']);
+  });
+
+  it('ignores malformed entries in the simple Studio shape', () => {
+    const schema = {
+      keys: [
+        { name: 'deal', type: 'integer', nullable: false },
+        null,
+        { type: 'float' },
+        { name: '', type: 'string' },
+      ],
+    };
+    expect(extractExpectedKeys(schema)).toEqual(['deal']);
+  });
+
+  it('does not leak the simple Studio classifier shape into expected keys', () => {
+    expect(extractExpectedKeys({ allowedValues: ['A', 'B'], terminalValues: ['A'] })).toEqual([]);
   });
 
   it('supports the legacy flat shape (keys minus reserved)', () => {

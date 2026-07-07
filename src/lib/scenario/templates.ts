@@ -3,13 +3,21 @@ import type { Scenario } from '../../types/scenario';
 /**
  * Pre-built scenario templates. Seeded into the database on first run.
  * Users can clone these to create their own variants.
- *
- * Simplified: 1 supervisor per scenario, 2-3 domain agents, clear outcome schemas.
  */
+
+/**
+ * Bump this whenever a template definition changes. Seeding refreshes stored
+ * template rows (is_template = true) whose config.templateVersion is older;
+ * user clones (is_template = false) are never touched.
+ *
+ * v2: procurement gains defaultParams + post-termination outcome extractor
+ *     and SVI appraiser supervisors.
+ */
+export const TEMPLATE_VERSION = 2;
 
 export const PROCUREMENT_SCENARIO: Omit<Scenario, 'id' | 'userId' | 'createdAt' | 'updatedAt'> = {
   name: 'Procurement Negotiation',
-  description: 'Buyer and seller negotiate price and terms. A judge supervisor classifies each round as acceptance, rejection, or continuation.',
+  description: 'Buyer and seller negotiate price and terms. A judge classifies each round; after termination an extractor records the outcome and an SVI appraiser scores subjective value for both roles.',
   isPublic: true,
   isTemplate: true,
   domainAgents: [
@@ -23,6 +31,41 @@ export const PROCUREMENT_SCENARIO: Omit<Scenario, 'id' | 'userId' | 'createdAt' 
       timing: 'per_round',
       outputSchema: { type: 'object', properties: { status: { type: 'string', enum: ['ACCEPTANCE', 'REJECTION', 'CONTINUE'] } }, required: ['status'] },
       promptTemplate: 'Classify the negotiation state as ACCEPTANCE, REJECTION, or CONTINUE.\nOutput JSON only: {"status": "CONTINUE"}',
+    },
+    {
+      name: 'outcome_extractor',
+      type: 'extractor',
+      timing: 'post_termination',
+      outputSchema: {
+        type: 'object',
+        properties: {
+          deal: { type: 'boolean' },
+          final_price: { type: ['number', 'null'] },
+          rounds: { type: 'integer' },
+        },
+        required: ['deal', 'final_price', 'rounds'],
+      },
+      promptTemplate: 'You are a data extractor for a negotiation study. Read the full transcript below and extract the final outcome.\n\nTRANSCRIPT\n{FULL_TRANSCRIPT}\n\nRULES\n- deal: true only if one party explicitly accepted an offer (e.g., ended with [ACCEPT]); false if a party walked away or the conversation ended without agreement.\n- final_price: the accepted per-unit price in EUR as a number; null if there was no deal.\n- rounds: the number of completed buyer+seller exchanges (one round = one buyer message and one seller message).\n\nOutput JSON only, exactly in this shape: {"deal": false, "final_price": null, "rounds": 0}',
+    },
+    {
+      name: 'svi_appraiser',
+      type: 'appraiser',
+      timing: 'post_termination',
+      outputSchema: {
+        type: 'object',
+        properties: {
+          buyer_instrumental: { type: 'integer', minimum: 1, maximum: 7 },
+          buyer_self: { type: 'integer', minimum: 1, maximum: 7 },
+          buyer_process: { type: 'integer', minimum: 1, maximum: 7 },
+          buyer_relationship: { type: 'integer', minimum: 1, maximum: 7 },
+          seller_instrumental: { type: 'integer', minimum: 1, maximum: 7 },
+          seller_self: { type: 'integer', minimum: 1, maximum: 7 },
+          seller_process: { type: 'integer', minimum: 1, maximum: 7 },
+          seller_relationship: { type: 'integer', minimum: 1, maximum: 7 },
+        },
+        required: ['buyer_instrumental', 'buyer_self', 'buyer_process', 'buyer_relationship', 'seller_instrumental', 'seller_self', 'seller_process', 'seller_relationship'],
+      },
+      promptTemplate: 'You are a negotiation researcher scoring Subjective Value (SVI; Curhan, Elfenbein & Xu, 2006) for {ROLE} based on the full negotiation transcript.\n\nRate each negotiator (buyer and seller) on the four SVI subscales, each as a single integer from 1 (very low) to 7 (very high):\n- instrumental: satisfaction with the substantive outcome (price/terms relative to their apparent goals).\n- self: how the negotiator likely feels about themselves (competence, face, living up to their own standards).\n- process: perceived fairness and quality of the negotiation process (voice, legitimacy, being listened to).\n- relationship: quality of the resulting relationship with the counterpart (trust, foundation for future dealings).\n\nOutcome summary: {OUTCOME_SUMMARY}\n\nOutput JSON only, exactly these keys: {"buyer_instrumental": 4, "buyer_self": 4, "buyer_process": 4, "buyer_relationship": 4, "seller_instrumental": 4, "seller_self": 4, "seller_process": 4, "seller_relationship": 4}',
     },
   ],
   turnPolicy: { type: 'alternating', roundDefinition: ['buyer', 'seller'] },
