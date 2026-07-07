@@ -66,9 +66,11 @@ describe('extractExpectedKeys', () => {
     expect(extractExpectedKeys(schema)).toEqual(['deal', 'final_price']);
   });
 
-  it('reads property keys from the procurement judge schema', () => {
-    const schema = PROCUREMENT_SCENARIO.supervisors[0].outputSchema;
-    expect(extractExpectedKeys(schema)).toEqual(['status']);
+  it('reads keys from the procurement outcome extractor schema (simple shape)', () => {
+    const extractor = PROCUREMENT_SCENARIO.supervisors.find(s => s.name === 'outcome_extractor')!;
+    expect(extractExpectedKeys(extractor.outputSchema)).toEqual([
+      'deal', 'final_price', 'rounds', 'payment_terms_days', 'delivery_weeks', 'warranty_months',
+    ]);
   });
 
   it('reads the simple Studio shape { keys: [{ name, type, nullable }] }', () => {
