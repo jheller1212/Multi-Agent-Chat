@@ -73,10 +73,11 @@ describe('buildSupervisorAgents', () => {
 
   it('production: builds one agent per supervisor with the right classes', () => {
     const agents = buildSupervisorAgents(scenario, configs, { anthropic: 'key' }, false);
-    expect(agents.size).toBe(3);
+    expect(agents.size).toBe(4);
     expect(agents.get('judge')).toBeInstanceOf(ClassifierAgent);
     expect(agents.get('outcome_extractor')).toBeInstanceOf(ExtractorAgent);
-    expect(agents.get('svi_appraiser')).toBeInstanceOf(AppraiserAgent);
+    expect(agents.get('svi_appraiser_buyer')).toBeInstanceOf(AppraiserAgent);
+    expect(agents.get('svi_appraiser_seller')).toBeInstanceOf(AppraiserAgent);
   });
 });
 
