@@ -106,3 +106,20 @@ describe('serialization round-trip', () => {
     expect(parseExtractorSchema(serialized)).toEqual(serialized);
   });
 });
+
+describe('v2 template compatibility', () => {
+  it('parses union types like ["number","null"] as nullable float', () => {
+    expect(
+      parseExtractorSchema({
+        type: 'object',
+        properties: { final_price: { type: ['number', 'null'] }, rounds: { type: 'integer' } },
+        required: ['final_price', 'rounds'],
+      }),
+    ).toEqual({
+      keys: [
+        { name: 'final_price', type: 'float', nullable: true },
+        { name: 'rounds', type: 'integer', nullable: false },
+      ],
+    });
+  });
+});

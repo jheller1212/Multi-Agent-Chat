@@ -79,12 +79,18 @@ export function parseExtractorSchema(raw: Record<string, unknown> | null | undef
   if (raw.properties && typeof raw.properties === 'object') {
     const required = asStringArray(raw.required);
     const keys = Object.entries(raw.properties as Record<string, unknown>).map(([name, prop]): ExtractorKey => {
-      const jsonType = prop && typeof prop === 'object' ? (prop as Record<string, unknown>).type : undefined;
+      let jsonType = prop && typeof prop === 'object' ? (prop as Record<string, unknown>).type : undefined;
+      let unionNullable = false;
+      // Union types like ['number', 'null'] — take the first non-null member.
+      if (Array.isArray(jsonType)) {
+        unionNullable = jsonType.includes('null');
+        jsonType = jsonType.find(t => t !== 'null');
+      }
       const type: ExtractorKey['type'] =
         jsonType === 'integer' ? 'integer'
         : jsonType === 'number' ? 'float'
         : 'string';
-      return { name, type, nullable: !required.includes(name) };
+      return { name, type, nullable: unionNullable || !required.includes(name) };
     });
     return { keys };
   }
