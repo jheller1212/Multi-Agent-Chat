@@ -526,7 +526,7 @@ export function Library({ onEditScenario, onCloneScenario, onNewScenario, onView
             <Icon name="search" size={14} />
             <input
               type="text"
-              placeholder="Search templates by name, domain, or tag\u2026"
+              placeholder="Search templates by name, domain, or tag…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               style={{

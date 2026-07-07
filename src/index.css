@@ -473,14 +473,14 @@
   --fill-secondary:  rgba(120, 120, 128, 0.10);
   --fill-tertiary:   rgba(120, 120, 128, 0.06);
 
-  /* Accent */
-  --accent:          #0A7AFF;
-  --accent-hover:    #0070EB;
-  --accent-pressed:  #0063D1;
-  --accent-soft:     rgba(10, 122, 255, 0.10);
-  --accent-soft-2:   rgba(10, 122, 255, 0.16);
-  --accent-fill:     #0A7AFF; /* filled buttons: same value both themes */
-  --accent-fill-hover: #0070EB;
+  /* Accent — DEXLab orange */
+  --accent:          #E84E10;
+  --accent-hover:    #C74109;
+  --accent-pressed:  #A8380A;
+  --accent-soft:     rgba(232, 78, 16, 0.10);
+  --accent-soft-2:   rgba(232, 78, 16, 0.16);
+  --accent-fill:     #E84E10; /* filled buttons: same value both themes */
+  --accent-fill-hover: #C74109;
   --on-accent:       #FFFFFF;
 
   /* Semantic */
@@ -535,13 +535,13 @@
   --fill-secondary:  rgba(120, 120, 128, 0.24);
   --fill-tertiary:   rgba(120, 120, 128, 0.14);
 
-  --accent:          #409CFF;
-  --accent-hover:    #5CAAFF;
-  --accent-pressed:  #2E8BF0;
-  --accent-soft:     rgba(64, 156, 255, 0.16);
-  --accent-soft-2:   rgba(64, 156, 255, 0.24);
-  --accent-fill:     #0A7AFF;
-  --accent-fill-hover: #0070EB;
+  --accent:          #FF7A45;
+  --accent-hover:    #FF8C5C;
+  --accent-pressed:  #F26A2C;
+  --accent-soft:     rgba(255, 122, 69, 0.16);
+  --accent-soft-2:   rgba(255, 122, 69, 0.24);
+  --accent-fill:     #E84E10;
+  --accent-fill-hover: #C74109;
   --on-accent:       #FFFFFF;
 
   --success:      #30C567; --success-soft: rgba(48, 197, 103, 0.16);
