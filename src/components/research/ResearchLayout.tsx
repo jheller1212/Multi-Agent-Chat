@@ -9,6 +9,7 @@ import { RunDashboard } from './RunDashboard';
 import { TranscriptViewer } from './TranscriptViewer';
 import { ScenarioBuilder } from './ScenarioBuilder';
 import { ExperimentLauncher } from './ExperimentLauncher';
+import { ExperimentWizard } from './wizard/ExperimentWizard';
 import { OnboardingTour } from './OnboardingTour';
 import { Icon } from './Icon';
 
@@ -440,9 +441,8 @@ export function ResearchLayout({ onBack }: ResearchLayoutProps) {
         />
       )}
       {screen === 'experiment' && (
-        <ExperimentLauncher
+        <ExperimentWizard
           scenarioId={selectedScenarioId ?? undefined}
-          scenarioName="Experiment"
           onLaunch={(experimentId) => { setSelectedExperimentId(experimentId); setScreen('runs'); }}
           onBack={() => setScreen('library')}
         />
