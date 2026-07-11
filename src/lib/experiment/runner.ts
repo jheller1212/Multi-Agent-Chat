@@ -1,5 +1,5 @@
 import type { AgentConfig, TranscriptMessage, SupervisorOutput } from '../../types/agents';
-import type { ExperimentDefinition, DyadRecord } from '../../types/experiment';
+import type { ExperimentDefinition } from '../../types/experiment';
 import type { Scenario } from '../../types/scenario';
 import type { ProviderType } from '../../types';
 import type { OrchestratorResult } from '../orchestrator/orchestrator';
@@ -456,7 +456,7 @@ export class ExperimentRunner {
 
         return message;
       },
-      runSupervisor: async (supervisorDef, config, transcript, signal) => {
+      runSupervisor: async (supervisorDef, config, transcript, _signal) => {
         if (this.experiment.devMode) {
           // In devMode, skip real supervisor calls.
           // For classifiers: check transcript for termination keywords → return ACCEPTANCE.

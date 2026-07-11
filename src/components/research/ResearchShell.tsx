@@ -183,7 +183,7 @@ function Topbar({ breadcrumb, onSignOut, user }: { breadcrumb: string[]; onSignO
   );
 }
 
-function NavItem({ id, label, icon, badge, active, onClick }: {
+function NavItem({ label, icon, badge, active, onClick }: {
   id: string; label: string; icon: string; badge?: string; active: boolean; onClick?: () => void;
 }) {
   return (

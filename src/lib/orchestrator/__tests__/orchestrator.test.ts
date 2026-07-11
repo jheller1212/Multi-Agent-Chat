@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ConversationOrchestrator } from '../orchestrator';
-import type { OrchestratorConfig } from '../orchestrator';
 import type { Scenario } from '../../../types/scenario';
 import type { AgentConfig, TranscriptMessage, SupervisorOutput } from '../../../types/agents';
 

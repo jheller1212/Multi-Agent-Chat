@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { sc, scNum, scBool } from '../lib/configHelpers';
 
 const STORAGE_KEY = 'mac_settings';

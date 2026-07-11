@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { hashString } from '../lib/hash';
-import type { AIModel, Message } from '../types';
+import type { AIModel } from '../types';
 import { Header } from './Header';
 import type { AppView } from './Header';
 import { ErrorDisplay } from './ErrorDisplay';

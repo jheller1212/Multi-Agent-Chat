@@ -58,8 +58,8 @@ export function computeAnomalies(
   deal: DealOutcome | null,
   params: NegotiationParams,
   terminationReason: string,
-  turns: number,
-  maxTurns: number,
+  _turns: number,
+  _maxTurns: number,
 ): { obr: number; owr: number; opr: number; dlr: number } {
   if (!deal) {
     return {
