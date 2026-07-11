@@ -25,7 +25,7 @@ export function validatePrompt(rendered: string, agentName: string): ValidationR
 export function validateSlotCoverage(
   template: string,
   providedSlots: Record<string, string | number>,
-  activeBlocks: string[],
+  _activeBlocks: string[],
 ): ValidationResult {
   const allSlots = extractSlotNames(template);
   const missing = allSlots.filter(slot => !(slot in providedSlots));

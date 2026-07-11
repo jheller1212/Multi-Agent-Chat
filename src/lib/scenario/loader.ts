@@ -120,7 +120,7 @@ export async function cloneScenario(scenarioId: string): Promise<Scenario | null
   const source = await loadScenario(scenarioId);
   if (!source) return null;
 
-  const { id: _id, userId: _uid, createdAt: _ca, updatedAt: _ua, name, description, isPublic, isTemplate, ...config } = source;
+  const { id: _id, userId: _uid, createdAt: _ca, updatedAt: _ua, name, description, isPublic: _isPublic, isTemplate: _isTemplate, ...config } = source;
 
   const { data, error } = await supabase
     .from('scenarios')

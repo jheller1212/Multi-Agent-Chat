@@ -424,7 +424,7 @@ export interface TranscriptViewerProps {
   onBack?: () => void;
 }
 
-export function TranscriptViewer({ dyadId, onNavigateDyad, onBack }: TranscriptViewerProps) {
+export function TranscriptViewer({ dyadId, onNavigateDyad, onBack: _onBack }: TranscriptViewerProps) {
   const [dyad, setDyad] = useState<DyadDetailRow | null>(null);
   const [messages, setMessages] = useState<TranscriptMessageRow[]>([]);
   const [supervisorOutputs, setSupervisorOutputs] = useState<SupervisorOutputRow[]>([]);

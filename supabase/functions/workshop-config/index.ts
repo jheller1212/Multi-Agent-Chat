@@ -20,7 +20,6 @@ function getCorsHeaders(req: Request) {
 }
 
 const enc = new TextEncoder();
-const dec = new TextDecoder();
 
 async function deriveKey(secret: string, salt: string): Promise<CryptoKey> {
   const keyMaterial = await crypto.subtle.importKey(
@@ -44,14 +43,6 @@ async function encrypt(key: CryptoKey, plaintext: string): Promise<string> {
   combined.set(iv);
   combined.set(ct, iv.length);
   return btoa(String.fromCharCode(...combined));
-}
-
-async function decrypt(key: CryptoKey, encoded: string): Promise<string> {
-  const raw = Uint8Array.from(atob(encoded), c => c.charCodeAt(0));
-  const iv = raw.slice(0, 12);
-  const ct = raw.slice(12);
-  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
-  return dec.decode(plain);
 }
 
 function jsonResponse(body: unknown, status: number, headers: Record<string, string>) {

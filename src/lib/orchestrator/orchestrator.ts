@@ -1,5 +1,5 @@
 import type { AgentConfig, TranscriptMessage, SupervisorOutput } from '../../types/agents';
-import type { Scenario, SupervisorDefinition, TerminationCondition } from '../../types/scenario';
+import type { Scenario, SupervisorDefinition } from '../../types/scenario';
 import type { TurnPolicy, TurnPolicyState } from './policies/types';
 import { createTurnPolicy } from './policy-factory';
 import { checkTermination } from './termination';

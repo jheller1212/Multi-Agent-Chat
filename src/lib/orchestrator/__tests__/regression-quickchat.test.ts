@@ -7,12 +7,10 @@ import { describe, it, expect } from 'vitest';
 describe('Quick Chat regression', () => {
   it('existing types export correctly', async () => {
     const types = await import('../../../types/index');
+    expect(types).toBeDefined(); // just checking the import resolved
     // AIModel union still exists and includes original values
     const model: typeof types.AIModel = undefined as unknown as typeof types.AIModel;
-    expect(model).toBeUndefined(); // just checking the import resolved
-
-    // ProviderType was added without breaking AIModel
-    expect(true).toBe(true);
+    expect(model).toBeUndefined();
   });
 
   it('provider factory still creates all 4 original providers', async () => {
