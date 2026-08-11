@@ -60,6 +60,52 @@ const AUTOSAVE_MS = 2500;
 let factorSeq = 0;
 const factorId = () => `factor-${++factorSeq}`;
 
+function sameChoice(a: ModelChoice, b: ModelChoice): boolean {
+  return a.provider === b.provider && a.model === b.model && a.temperature === b.temperature;
+}
+
+/**
+ * Reconstruct which factor (if any) varies the model, the per-agent/level
+ * matrix, and the global default choice from a draft's persisted
+ * agentAssignments. A factor is "the varying one" if any agent's model
+ * choice actually differs across its levels — detecting variance directly
+ * (rather than trusting which factors have mapping entries) works
+ * regardless of how many factors happen to be keyed.
+ */
+function restoreVarianceFromAssignments(
+  factors: { name: string; levels: string[] }[],
+  agentAssignments: AgentAssignment[],
+): { varyingFactorName: string | null; matrix: Record<string, Record<string, ModelChoice>>; globalChoice: ModelChoice } {
+  let varyingFactorName: string | null = null;
+  const matrix: Record<string, Record<string, ModelChoice>> = {};
+  let globalChoice: ModelChoice = DEFAULT_CHOICE;
+  let sawAny = false;
+
+  for (const factor of factors) {
+    let factorVaries = false;
+    for (const assignment of agentAssignments) {
+      const values = factor.levels
+        .map(level => assignment.factorMappings[`${factor.name}=${level}`])
+        .filter((v): v is ModelChoice => !!v);
+      if (values.length === 0) continue;
+      if (!sawAny) { globalChoice = values[0]; sawAny = true; }
+      if (values.some(v => !sameChoice(v, values[0]))) factorVaries = true;
+    }
+    if (factorVaries) {
+      varyingFactorName = factor.name;
+      for (const assignment of agentAssignments) {
+        for (const level of factor.levels) {
+          const key = `${factor.name}=${level}`;
+          const choice = assignment.factorMappings[key];
+          if (choice) matrix[assignment.agentName] = { ...matrix[assignment.agentName], [key]: choice };
+        }
+      }
+    }
+  }
+
+  return { varyingFactorName, matrix, globalChoice };
+}
+
 /** Wizard step 1: scenario, factors, models, parameters, run settings. */
 export function ConfigureStep({ initialScenarioId, onContinue }: ConfigureStepProps) {
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
@@ -130,7 +176,15 @@ export function ConfigureStep({ initialScenarioId, onContinue }: ConfigureStepPr
       setName(draft.name);
       const c = draft.config;
       if (Array.isArray(c.factors) && c.factors.length > 0) {
-        setFactors(c.factors.map(f => ({ ...f, id: factorId(), variesModel: false })));
+        // Reconstruct which factor varies the model, the per-agent/level
+        // matrix, and the global default from the draft's persisted
+        // agentAssignments — the draft config itself only stores
+        // {name, levels} per factor, so without this a restore always
+        // silently degraded a varied design back to a single global model.
+        const restored = restoreVarianceFromAssignments(c.factors, c.agentAssignments ?? []);
+        setFactors(c.factors.map(f => ({ ...f, id: factorId(), variesModel: f.name === restored.varyingFactorName })));
+        setMatrix(restored.matrix);
+        setGlobalChoice(restored.globalChoice);
       }
       if (c.params) {
         setParams(prev => ({ ...prev, ...Object.fromEntries(Object.entries(c.params).map(([k, v]) => [k, String(v)])) }));
@@ -152,6 +206,17 @@ export function ConfigureStep({ initialScenarioId, onContinue }: ConfigureStepPr
     return scenario.domainAgents.map(agent => {
       const factorMappings: AgentAssignment['factorMappings'] = {};
       for (const factor of factors) {
+        // Only the varying factor needs a mapping entry — its levels are the
+        // only ones where the model actually differs. `resolveFactorMapping`
+        // (config-validation.ts) returns the FIRST key that matches a cell,
+        // so emitting every non-varying factor's levels too (all pointing at
+        // the same globalChoice) would silently shadow the varying factor's
+        // real per-level choice whenever that factor isn't first in
+        // `factors` — a wrong-model bug with no error or warning. When
+        // nothing varies, every factor maps to the same globalChoice, so
+        // emitting them all is both safe and necessary (a cell must always
+        // match something).
+        if (varyingFactor && factor !== varyingFactor) continue;
         for (const level of factor.levels) {
           const key = `${factor.name}=${level}`;
           factorMappings[key] =
@@ -162,7 +227,7 @@ export function ConfigureStep({ initialScenarioId, onContinue }: ConfigureStepPr
       }
       return { agentName: agent.name, factorMappings };
     });
-  }, [scenario, factors, matrix, globalChoice]);
+  }, [scenario, factors, matrix, globalChoice, varyingFactor]);
 
   const buildConfig = useCallback((): ExperimentDraftConfig => ({
     factors: factors.map(({ name: fname, levels }) => ({ name: fname, levels })),

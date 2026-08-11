@@ -79,6 +79,32 @@ export function isBound(slot: string, defaultParams: Record<string, string | num
 
 const DEFAULT_TURN_CAP = 12;
 
+/**
+ * Legacy JSON-Schema-ish classifier schemas don't carry which labels are
+ * terminal — that lives only in `terminationConditions`. Without this,
+ * loading a legacy scenario into the Studio silently wipes terminalValues,
+ * and saving drops the supervisor_classification termination condition
+ * entirely (deal-detection stops working). New simple-shape schemas already
+ * carry terminalValues via parseClassifierSchema, so this only backfills
+ * the gap for the legacy shape.
+ */
+function withLegacyTerminalValues(
+  schema: ClassifierSchema,
+  supervisorName: string,
+  terminationConditions: TerminationCondition[],
+): ClassifierSchema {
+  if (schema.terminalValues.length > 0) return schema;
+  const condition = terminationConditions.find(
+    (c): c is Extract<TerminationCondition, { type: 'supervisor_classification' }> =>
+      c.type === 'supervisor_classification' && c.supervisorName === supervisorName,
+  );
+  if (!condition) return schema;
+  return {
+    ...schema,
+    terminalValues: condition.terminalValues.filter(v => schema.allowedValues.includes(v)),
+  };
+}
+
 export function scenarioToStudio(scenario: Scenario): StudioState {
   const agents: StudioAgent[] = [
     ...scenario.domainAgents.map((a): StudioAgent => ({
@@ -100,7 +126,11 @@ export function scenarioToStudio(scenario: Scenario): StudioState {
       prompt: s.promptTemplate,
       supervisorType: s.type,
       timing: s.timing,
-      classifierSchema: parseClassifierSchema(s.outputSchema),
+      classifierSchema: withLegacyTerminalValues(
+        parseClassifierSchema(s.outputSchema),
+        s.name,
+        scenario.terminationConditions,
+      ),
       extractorSchema: parseExtractorSchema(s.outputSchema),
     })),
   ];
@@ -163,7 +193,11 @@ export function studioToScenario(
     }
   }
 
-  const mediator = state.agents.find(a => a.id === state.settings.mediatorId);
+  // Lane-filtered: a mediatorId can go stale if the agent was dragged out of
+  // the supervisor lane after being picked as mediator (see ScenarioStudio's
+  // lane-change handler, which clears it proactively — this is belt-and-
+  // suspenders so a domain agent can never end up as turnPolicy.config.mediator).
+  const mediator = state.agents.find(a => a.id === state.settings.mediatorId && a.lane === 'supervisor');
 
   return {
     ...base,

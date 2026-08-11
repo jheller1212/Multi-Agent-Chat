@@ -118,7 +118,18 @@ export function ScenarioStudio({ scenarioId, onUseInExperiment }: ScenarioStudio
   useEffect(() => () => clearTimeout(autosaveTimer.current), []);
 
   const update = {
-    agents: (next: StudioAgent[]) => { setAgents(next); touch(); },
+    agents: (next: StudioAgent[]) => {
+      setAgents(next);
+      // A mediator dragged out of the supervisor lane must stop being the
+      // mediator — otherwise a stale mediatorId survives into the saved
+      // scenario as a domain agent's name (see model.ts's lane filter).
+      setSettings(prev => {
+        if (!prev.mediatorId) return prev;
+        const stillSupervisor = next.some(a => a.id === prev.mediatorId && a.lane === 'supervisor');
+        return stillSupervisor ? prev : { ...prev, mediatorId: null };
+      });
+      touch();
+    },
     settings: (next: StudioSettings) => { setSettings(next); touch(); },
     name: (next: string) => { setName(next); touch(); },
     agentPatch: (id: string, patch: Partial<StudioAgent>) => {
